@@ -47,7 +47,6 @@ namespace Accelbuffer
             m_Buffer = (byte*)Marshal.ReAllocHGlobal(new IntPtr(m_Buffer), new IntPtr(Size)).ToPointer();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Reset()
         {
             m_ByteCount = 0;
@@ -257,7 +256,6 @@ namespace Accelbuffer
 
                 fixed (char* p = value)
                 {
-
                     switch (encoding)
                     {
                         case CharEncoding.Unicode:
