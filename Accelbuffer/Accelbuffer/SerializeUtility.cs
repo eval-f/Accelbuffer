@@ -9,7 +9,7 @@ namespace Accelbuffer
             return type == null ? false : IsPrimitiveSerializableTypeInternal(type, out _);
         }
 
-        internal static bool IsPrimitiveSerializableTypeInternal(Type type, out bool needEncoding)
+        public static bool IsPrimitiveSerializableTypeInternal(Type type, out bool needEncoding)
         {
             switch (Type.GetTypeCode(type))
             {

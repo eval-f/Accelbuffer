@@ -47,7 +47,6 @@ namespace Accelbuffer
             m_Buffer = (byte*)Marshal.ReAllocHGlobal(new IntPtr(m_Buffer), new IntPtr(Size)).ToPointer();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Reset()
         {
             m_ByteCount = 0;
@@ -61,17 +60,10 @@ namespace Accelbuffer
             }
 
             byte[] result = m_ByteCount == 0 ? Array.Empty<byte>() : new byte[m_ByteCount];
-            long count = m_ByteCount;
-            byte* source = m_Buffer;
-
+            
             fixed (byte* ptr = result)
             {
-                byte* p = ptr;
-
-                while (count-- > 0)
-                {
-                    *p++ = *source++;
-                }
+                Buffer.MemoryCopy(m_Buffer, ptr, m_ByteCount, m_ByteCount);
             }
 
             return result;
@@ -108,14 +100,9 @@ namespace Accelbuffer
                 EnsureSize(size);
             }
 
-            byte* p = m_Buffer + m_ByteCount;
+            Buffer.MemoryCopy(bytes, m_Buffer + m_ByteCount, length, length);
 
-            while (length > 0)
-            {
-                *p++ = *bytes++;
-                m_ByteCount++;
-                length--;
-            }
+            m_ByteCount = size;
         }
 
         public void WriteByte(byte b)
@@ -127,8 +114,7 @@ namespace Accelbuffer
                 EnsureSize(size);
             }
 
-            m_Buffer[m_ByteCount] = b;
-            m_ByteCount++;
+            m_Buffer[m_ByteCount++] = b;
         }
 
         public void WriteValue(sbyte value)
@@ -195,22 +181,14 @@ namespace Accelbuffer
 
         public void WriteValue(char value, CharEncoding encoding)
         {
-            WriteValue(value, encoding, true);
-        }
+            CharTag tag = new CharTag(value, encoding);
+            WriteByte(tag.GetTagByte());
 
-        private void WriteValue(char value, CharEncoding encoding, bool writeTag)
-        {
-            if (writeTag)
+            if (tag.IsDefaultValue)
             {
-                CharTag tag = new CharTag(value, encoding);
-                WriteByte(tag.GetTagByte());
-
-                if (tag.IsDefaultValue)
-                {
-                    return;
-                }
+                return;
             }
-            
+
             switch (encoding)
             {
                 case CharEncoding.Unicode:
@@ -259,24 +237,28 @@ namespace Accelbuffer
 
             if (!tag.IsDefaultValue && !tag.IsEmptyString)
             {
+                byte[] bytes;
+
                 switch (encoding)
                 {
                     case CharEncoding.Unicode:
-                        WriteValue(value.Length << 1);
+                        bytes = Encoding.Unicode.GetBytes(value);
                         break;
 
                     case CharEncoding.ASCII:
-                        WriteValue(value.Length);
+                        bytes = Encoding.ASCII.GetBytes(value);
                         break;
 
                     default://case CharEncoding.UTF8:
-                        WriteValue(Encoding.UTF8.GetByteCount(value));
+                        bytes = Encoding.UTF8.GetBytes(value);
                         break;
                 }
 
-                for (int i = 0; i < value.Length; i++)
+                WriteValue(bytes.Length);
+
+                fixed (byte* p = bytes)
                 {
-                    WriteValue(value[i], encoding, false);
+                    WriteBytes(p, bytes.Length);
                 }
             }
         }

@@ -16,7 +16,7 @@ namespace Accelbuffer
         private readonly IntPtr m_ReadByteFuncPtr;
         private long m_ReadCount;
 
-        public InputBuffer(byte* source, long size)
+        internal InputBuffer(byte* source, long size)
         {
             m_Buffer = source;
             m_Size = size;
@@ -24,7 +24,7 @@ namespace Accelbuffer
             m_ReadCount = 0;
         }
 
-        public InputBuffer(ReadByteFunction readByteFunc, long size)
+        internal InputBuffer(ReadByteFunction readByteFunc, long size)
         {
             m_Buffer = null;
             m_Size = size;
@@ -70,11 +70,8 @@ namespace Accelbuffer
             }
             else
             {
-                while (length > 0)
-                {
-                    *buffer++ = *(m_Buffer + m_ReadCount++);
-                    length--;
-                }
+                Buffer.MemoryCopy(m_Buffer + m_ReadCount, buffer, length, length);
+                m_ReadCount += length;
             }
         }
 
@@ -348,24 +345,21 @@ namespace Accelbuffer
                     {
                         int len = ReadInt32();
 
+                        byte* bs = stackalloc byte[len];
+                        ReadBytes(bs, len);
+
                         switch (encoding)
                         {
                             case CharEncoding.Unicode:
-                                byte* bs = stackalloc byte[len];
-                                ReadBytes(bs, len);
-                                value = new string((char*)bs, 0, len >> 1);
+                                value = Encoding.Unicode.GetString(bs, len);
                                 break;
 
                             case CharEncoding.ASCII:
-                                byte* asciiBytes = stackalloc byte[len];
-                                ReadBytes(asciiBytes, len);
-                                value = Encoding.ASCII.GetString(asciiBytes, len);
+                                value = Encoding.ASCII.GetString(bs, len);
                                 break;
 
                             default://case CharEncoding.UTF32:
-                                byte* utf8Bytes = stackalloc byte[len];
-                                ReadBytes(utf8Bytes, len);
-                                value = Encoding.UTF8.GetString(utf8Bytes, len);
+                                value = Encoding.UTF8.GetString(bs, len);
                                 break;
                         }
                     }

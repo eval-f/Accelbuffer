@@ -4,3 +4,9 @@ C:\Users\Administrator\Desktop\Accelbuffer\Accelbuffer\obj\Release\Accelbuffer.c
 C:\Users\Administrator\Desktop\Accelbuffer\Accelbuffer\obj\Release\Accelbuffer.csproj.CoreCompileInputs.cache
 C:\Users\Administrator\Desktop\Accelbuffer\Accelbuffer\obj\Release\Accelbuffer.dll
 C:\Users\Administrator\Desktop\Accelbuffer\Accelbuffer\obj\Release\Accelbuffer.pdb
+C:\Users\Administrator\Desktop\GitHub\Accelbuffer\Accelbuffer\Accelbuffer\bin\Release\Accelbuffer.dll
+C:\Users\Administrator\Desktop\GitHub\Accelbuffer\Accelbuffer\Accelbuffer\bin\Release\Accelbuffer.pdb
+C:\Users\Administrator\Desktop\GitHub\Accelbuffer\Accelbuffer\Accelbuffer\obj\Release\Accelbuffer.csprojAssemblyReference.cache
+C:\Users\Administrator\Desktop\GitHub\Accelbuffer\Accelbuffer\Accelbuffer\obj\Release\Accelbuffer.csproj.CoreCompileInputs.cache
+C:\Users\Administrator\Desktop\GitHub\Accelbuffer\Accelbuffer\Accelbuffer\obj\Release\Accelbuffer.dll
+C:\Users\Administrator\Desktop\GitHub\Accelbuffer\Accelbuffer\Accelbuffer\obj\Release\Accelbuffer.pdb
