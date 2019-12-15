@@ -1,0 +1,10 @@
+C:\Users\Administrator\Desktop\accelc\accelc\bin\Release\accelc.exe.config
+C:\Users\Administrator\Desktop\accelc\accelc\bin\Release\accelc.exe
+C:\Users\Administrator\Desktop\accelc\accelc\bin\Release\accelc.pdb
+C:\Users\Administrator\Desktop\accelc\accelc\bin\Release\Accelbuffer.dll
+C:\Users\Administrator\Desktop\accelc\accelc\bin\Release\Accelbuffer.pdb
+C:\Users\Administrator\Desktop\accelc\accelc\obj\Release\accelc.csproj.CoreCompileInputs.cache
+C:\Users\Administrator\Desktop\accelc\accelc\obj\Release\accelc.csproj.CopyComplete
+C:\Users\Administrator\Desktop\accelc\accelc\obj\Release\accelc.exe
+C:\Users\Administrator\Desktop\accelc\accelc\obj\Release\accelc.pdb
+C:\Users\Administrator\Desktop\accelc\accelc\obj\Release\accelc.csprojAssemblyReference.cache
