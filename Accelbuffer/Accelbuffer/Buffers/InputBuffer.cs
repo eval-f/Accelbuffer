@@ -16,7 +16,7 @@ namespace Accelbuffer
         private readonly IntPtr m_ReadByteFuncPtr;
         private long m_ReadCount;
 
-        internal InputBuffer(byte* source, long size)
+        public InputBuffer(byte* source, long size)
         {
             m_Buffer = source;
             m_Size = size;
@@ -24,7 +24,7 @@ namespace Accelbuffer
             m_ReadCount = 0;
         }
 
-        internal InputBuffer(ReadByteFunction readByteFunc, long size)
+        public InputBuffer(ReadByteFunction readByteFunc, long size)
         {
             m_Buffer = null;
             m_Size = size;
@@ -70,8 +70,11 @@ namespace Accelbuffer
             }
             else
             {
-                Buffer.MemoryCopy(m_Buffer + m_ReadCount, buffer, length, length);
-                m_ReadCount += length;
+                while (length > 0)
+                {
+                    *buffer++ = *(m_Buffer + m_ReadCount++);
+                    length--;
+                }
             }
         }
 

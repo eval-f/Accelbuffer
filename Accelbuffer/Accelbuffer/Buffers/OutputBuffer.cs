@@ -47,6 +47,7 @@ namespace Accelbuffer
             m_Buffer = (byte*)Marshal.ReAllocHGlobal(new IntPtr(m_Buffer), new IntPtr(Size)).ToPointer();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Reset()
         {
             m_ByteCount = 0;
@@ -60,10 +61,17 @@ namespace Accelbuffer
             }
 
             byte[] result = m_ByteCount == 0 ? Array.Empty<byte>() : new byte[m_ByteCount];
-            
+            long count = m_ByteCount;
+            byte* source = m_Buffer;
+
             fixed (byte* ptr = result)
             {
-                Buffer.MemoryCopy(m_Buffer, ptr, m_ByteCount, m_ByteCount);
+                byte* p = ptr;
+
+                while (count-- > 0)
+                {
+                    *p++ = *source++;
+                }
             }
 
             return result;
@@ -100,9 +108,14 @@ namespace Accelbuffer
                 EnsureSize(size);
             }
 
-            Buffer.MemoryCopy(bytes, m_Buffer + m_ByteCount, length, length);
+            byte* p = m_Buffer + m_ByteCount;
 
-            m_ByteCount = size;
+            while (length > 0)
+            {
+                *p++ = *bytes++;
+                m_ByteCount++;
+                length--;
+            }
         }
 
         public void WriteByte(byte b)
@@ -114,7 +127,8 @@ namespace Accelbuffer
                 EnsureSize(size);
             }
 
-            m_Buffer[m_ByteCount++] = b;
+            m_Buffer[m_ByteCount] = b;
+            m_ByteCount++;
         }
 
         public void WriteValue(sbyte value)
@@ -237,29 +251,31 @@ namespace Accelbuffer
 
             if (!tag.IsDefaultValue && !tag.IsEmptyString)
             {
-                byte[] bytes;
+                int byteCount;
+                int maxByte = value.Length << 2;
+                byte* bytes = stackalloc byte[maxByte];
 
-                switch (encoding)
+                fixed (char* p = value)
                 {
-                    case CharEncoding.Unicode:
-                        bytes = Encoding.Unicode.GetBytes(value);
-                        break;
 
-                    case CharEncoding.ASCII:
-                        bytes = Encoding.ASCII.GetBytes(value);
-                        break;
+                    switch (encoding)
+                    {
+                        case CharEncoding.Unicode:
+                            byteCount = Encoding.Unicode.GetBytes(p, value.Length, bytes, maxByte);
+                            break;
 
-                    default://case CharEncoding.UTF8:
-                        bytes = Encoding.UTF8.GetBytes(value);
-                        break;
+                        case CharEncoding.ASCII:
+                            byteCount = Encoding.ASCII.GetBytes(p, value.Length, bytes, maxByte);
+                            break;
+
+                        default://case CharEncoding.UTF8:
+                            byteCount = Encoding.UTF8.GetBytes(p, value.Length, bytes, maxByte);
+                            break;
+                    }
                 }
 
-                WriteValue(bytes.Length);
-
-                fixed (byte* p = bytes)
-                {
-                    WriteBytes(p, bytes.Length);
-                }
+                WriteValue(byteCount);
+                WriteBytes(bytes, byteCount);
             }
         }
     }
