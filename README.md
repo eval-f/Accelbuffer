@@ -124,7 +124,7 @@ public struct UserInput : ISerializeMessageReceiver
 ## 性能对比
 - 执行一百次平均值，可能存在误差
 
-- 测试类型
+> 测试类型
 
 ```C#
 [Serializable]
