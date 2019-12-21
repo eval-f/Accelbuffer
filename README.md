@@ -22,7 +22,7 @@
 |序列化事件回调接口(`ISerializeMessageReceiver`)|支持|
 |序列化数据损坏检查(`StrictMode`)|支持|
 |运行时代理自动注入(`RuntimeSerializeProxyInjection`)|不完全支持|
-|C#代理脚本自动生成(`accelc`)|不支持|
+|C#代理脚本自动生成(`accelc`)|目前不受支持|
 
 ## 基本用法
 ### 1.利用特性标记类型
