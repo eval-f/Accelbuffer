@@ -146,7 +146,7 @@ StudentData data = new StudentData
 };
 ```
 
-|序列化器名称|序列化 GC Alloc/B|反序列化 GC Alloc/B|序列化时间/ns|反序列化时间/ns|序列化文件大小/字节|
+|序列化器名称|序列化 GC Alloc/字节|反序列化 GC Alloc/字节|序列化时间/纳秒|反序列化时间/纳秒|序列化文件大小/字节|
 |:-:|:-:|:-:|:-:|:-:|:-:|
 |Accelbuffer|85|68|2002|941|13|
 |UnityJsonSerializer|188|68|2775|6463|61|
