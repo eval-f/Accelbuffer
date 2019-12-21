@@ -16,7 +16,7 @@
 ## 部分功能
 |功能名称|当前是否支持|
 |:-:|:-:|
-|简单类型序列化(`sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`, `string`, `float`, `double`)|支持|
+|简单类型序列化(`sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`, `string`, `float`, `double`, `bool`)|支持|
 |字符编码设置(`ASCII`, `Unicode`, `UTF-8`)|支持|
 |动态长度整数(`VariableInteger`)，固定长度整数(`FixedInteger`)|支持|
 |序列化事件回调接口(`ISerializeMessageReceiver`)|支持|
