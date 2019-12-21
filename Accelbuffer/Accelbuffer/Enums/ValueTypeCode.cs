@@ -6,43 +6,28 @@
     internal enum ValueTypeCode : byte
     {
         /// <summary>
-        /// 8位整数
+        /// 动态长度的整数(0-64b)
         /// </summary>
-        Integer_8b = 0,
+        VariableInteger = 0,
 
         /// <summary>
-        /// 16位整数
+        /// 固定长度的整数(0b, 8b, 16b, 32b, 64b)
         /// </summary>
-        Integer_16b = 1,
-
-        /// <summary>
-        /// 32位整数
-        /// </summary>
-        Integer_32b = 2,
-
-        /// <summary>
-        /// 64位整数
-        /// </summary>
-        Integer_64b = 3,
+        FixedInteger = 1,
 
         /// <summary>
         /// 布尔值(true or false)
         /// </summary>
-        Boolean = 4,
+        Boolean = 2,
 
         /// <summary>
-        /// 字符值
+        /// 字符值(char or string)
         /// </summary>
-        Char = 5,
+        Char = 3,
 
         /// <summary>
-        /// 32位浮点数
+        /// 浮点数(32b or 64b)
         /// </summary>
-        Float_32b = 6,
-
-        /// <summary>
-        /// 64位浮点数
-        /// </summary>
-        Float_64b = 7
+        Float = 4
     }
 }

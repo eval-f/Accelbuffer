@@ -22,7 +22,7 @@ namespace Accelbuffer
 
         unsafe T[] ISerializeProxy<T[]>.Deserialize(in InputBuffer* buffer)
         {
-            int len = buffer->ReadInt32();
+            int len = buffer->ReadVariableInt32(0);
             T[] result = new T[len];
 
             fixed (T* ptr = result)
@@ -41,7 +41,7 @@ namespace Accelbuffer
 
         unsafe void ISerializeProxy<T[]>.Serialize(in T[] obj, in OutputBuffer* buffer)
         {
-            buffer->WriteValue(obj.Length);
+            buffer->WriteValue(0, obj.Length, false);
 
             fixed (T* ptr = obj)
             {
@@ -58,7 +58,7 @@ namespace Accelbuffer
 
         unsafe void ISerializeProxy<List<T>>.Serialize(in List<T> obj, in OutputBuffer* buffer)
         {
-            buffer->WriteValue(obj.Count);
+            buffer->WriteValue(0, obj.Count, false);
 
             for (int i = 0; i < obj.Count; i++)
             {
@@ -69,7 +69,7 @@ namespace Accelbuffer
 
         unsafe List<T> ISerializeProxy<List<T>>.Deserialize(in InputBuffer* buffer)
         {
-            int len = buffer->ReadInt32();
+            int len = buffer->ReadVariableInt32(0);
             List<T> result = new List<T>(len);
 
             for (int i = 0; i < len; i++)

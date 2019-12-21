@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text;
-using System.Runtime.InteropServices;
+using static Accelbuffer.SerializeUtility;
+using static Accelbuffer.TagUtility;
 
 namespace Accelbuffer
 {
@@ -9,369 +10,594 @@ namespace Accelbuffer
     /// </summary>
     public unsafe struct InputBuffer
     {
-        public delegate int ReadByteFunction();
-
         private readonly byte* m_Buffer;
         private readonly long m_Size;
-        private readonly IntPtr m_ReadByteFuncPtr;
         private long m_ReadCount;
+        private bool m_StrictMode;
 
-        public InputBuffer(byte* source, long size)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="size"></param>
+        /// <param name="strictMode"></param>
+        public InputBuffer(byte* source, long size, bool strictMode)
         {
             m_Buffer = source;
             m_Size = size;
-            m_ReadByteFuncPtr = IntPtr.Zero;
             m_ReadCount = 0;
+            m_StrictMode = strictMode;
         }
 
-        public InputBuffer(ReadByteFunction readByteFunc, long size)
-        {
-            m_Buffer = null;
-            m_Size = size;
-            m_ReadByteFuncPtr = Marshal.GetFunctionPointerForDelegate<ReadByteFunction>(readByteFunc);
-            m_ReadCount = 0;
-        }
-
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
         public byte ReadByte()
         {
             if (m_ReadCount == m_Size)
             {
-                throw new IndexOutOfRangeException();
-            }
-
-            if (m_Buffer == null)
-            {
-                m_ReadCount++;
-                return (byte)Marshal.GetDelegateForFunctionPointer<ReadByteFunction>(m_ReadByteFuncPtr)();
+                throw new IndexOutOfRangeException("缓冲区已经读取至末尾");
             }
 
             return *(m_Buffer + m_ReadCount++);
         }
 
-        public void ReadBytes(byte* buffer, int length)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="length"></param>
+        public void ReadBytes(byte* buffer, long length)
         {
-            if (length < 0)
+            if (length <= 0)
             {
-                throw new ArgumentOutOfRangeException();
+                return;
             }
 
             if (m_ReadCount + length > m_Size)
             {
-                throw new ArgumentOutOfRangeException();
+                length = m_Size - m_ReadCount;
             }
 
-            if (m_Buffer == null)
+            while (length > 0)
             {
-                for (int i = 0; i < length; i++)
-                {
-                    buffer[i] = (byte)Marshal.GetDelegateForFunctionPointer<ReadByteFunction>(m_ReadByteFuncPtr)();
-                    m_ReadCount++;
-                }
-            }
-            else
-            {
-                while (length > 0)
-                {
-                    *buffer++ = *(m_Buffer + m_ReadCount++);
-                    length--;
-                }
+                *buffer++ = *(m_Buffer + m_ReadCount++);
+                length--;
             }
         }
 
-        public sbyte ReadInt8()
+        private void OnIndexNotMatch(byte index)
         {
-            IntegerTag tag = new IntegerTag(ReadByte());
-
-            if (tag.MatchTypeCode(ValueTypeCode.Integer_8b))
+            if (m_StrictMode)
             {
-                sbyte value = IntegerTag.Integer8DefaultValue;
-
-                ReadBytes((byte*)&value, tag.ByteCount);
-
-                if (tag.Sign == IntegerSign.Negative)
-                {
-                    IntegerTag.NegateBits(&value);
-                }
-
-                return value;
+                throw new MissingSerializedValueException(index);
             }
 
-            throw new TagDismatchException(tag);
+            m_ReadCount--;
         }
 
-        public byte ReadUInt8()
+        private uint ReadLength()
         {
-            IntegerTag tag = new IntegerTag(ReadByte());
+            ToVariableIntegerTag(ReadByte(), out _, out _, out int byteCount);
+            uint value = default;
+            ReadBytes((byte*)&value, byteCount);
+            return value;
+        }
 
-            if (tag.MatchTypeCode(ValueTypeCode.Integer_8b, IntegerSign.PositiveOrUnsigned))
+        private T ReadUVarInt<T>(byte index) where T : unmanaged
+        {
+            if (ReadByte() != index)
             {
-                byte value = IntegerTag.UInteger8DefaultValue;
-
-                ReadBytes(&value, tag.ByteCount);
-
-                return value;
+                OnIndexNotMatch(index);
+                return default;
             }
 
-            throw new TagDismatchException(tag);
-        }
+            ToVariableIntegerTag(ReadByte(), out ValueTypeCode typeCode, out IntegerSign sign, out int byteCount);
 
-        public short ReadInt16()
-        {
-            IntegerTag tag = new IntegerTag(ReadByte());
-
-            if (tag.MatchTypeCode(ValueTypeCode.Integer_16b))
+            if (typeCode != ValueTypeCode.VariableInteger)
             {
-                short value = IntegerTag.Integer16DefaultValue;
-
-                ReadBytes((byte*)&value, tag.ByteCount);
-
-                if (tag.Sign == IntegerSign.Negative)
-                {
-                    IntegerTag.NegateBits(&value);
-                }
-
-                return value;
+                throw new TagDismatchException(ValueTypeCode.VariableInteger, typeCode);
             }
 
-            throw new TagDismatchException(tag);
-        }
-
-        public ushort ReadUInt16()
-        {
-            IntegerTag tag = new IntegerTag(ReadByte());
-
-            if (tag.MatchTypeCode(ValueTypeCode.Integer_16b, IntegerSign.PositiveOrUnsigned))
+            if (sign != IntegerSign.PositiveOrUnsigned)
             {
-                ushort value = IntegerTag.UInteger16DefaultValue;
-
-                ReadBytes((byte*)&value, tag.ByteCount);
-
-                return value;
+                throw new TagDismatchException(IntegerSign.PositiveOrUnsigned, sign);
             }
 
-            throw new TagDismatchException(tag);
-        }
-
-        public int ReadInt32()
-        {
-            IntegerTag tag = new IntegerTag(ReadByte());
-
-            if (tag.MatchTypeCode(ValueTypeCode.Integer_32b))
+            if (byteCount > sizeof(T))
             {
-                int value = IntegerTag.Integer32DefaultValue;
-
-                ReadBytes((byte*)&value, tag.ByteCount);
-
-                if (tag.Sign == IntegerSign.Negative)
-                {
-                    IntegerTag.NegateBits(&value);
-                }
-
-                return value;
+                throw new TagDismatchException(sizeof(T), byteCount);
             }
 
-            throw new TagDismatchException(tag);
+            T value = default;
+
+            ReadBytes((byte*)&value, byteCount);
+
+            return value;
         }
 
-        public uint ReadUInt32()
+        private T ReadSVarInt<T>(byte index) where T : unmanaged
         {
-            IntegerTag tag = new IntegerTag(ReadByte());
-
-            if (tag.MatchTypeCode(ValueTypeCode.Integer_32b, IntegerSign.PositiveOrUnsigned))
+            if (ReadByte() != index)
             {
-                uint value = IntegerTag.UInteger32DefaultValue;
-
-                ReadBytes((byte*)&value, tag.ByteCount);
-
-                return value;
+                OnIndexNotMatch(index);
+                return default;
             }
 
-            throw new TagDismatchException(tag);
-        }
+            ToVariableIntegerTag(ReadByte(), out ValueTypeCode typeCode, out IntegerSign sign, out int byteCount);
 
-        public long ReadInt64()
-        {
-            IntegerTag tag = new IntegerTag(ReadByte());
-
-            if (tag.MatchTypeCode(ValueTypeCode.Integer_64b))
+            if (typeCode != ValueTypeCode.VariableInteger)
             {
-                long value = IntegerTag.Integer64DefaultValue;
-
-                ReadBytes((byte*)&value, tag.ByteCount);
-
-                if (tag.Sign == IntegerSign.Negative)
-                {
-                    IntegerTag.NegateBits(&value);
-                }
-
-                return value;
+                throw new TagDismatchException(ValueTypeCode.VariableInteger, typeCode);
             }
 
-            throw new TagDismatchException(tag);
-        }
-
-        public ulong ReadUInt64()
-        {
-            IntegerTag tag = new IntegerTag(ReadByte());
-
-            if (tag.MatchTypeCode(ValueTypeCode.Integer_64b, IntegerSign.PositiveOrUnsigned))
+            if (byteCount > sizeof(T))
             {
-                ulong value = IntegerTag.UInteger64DefaultValue;
-
-                ReadBytes((byte*)&value, tag.ByteCount);
-
-                return value;
+                throw new TagDismatchException(sizeof(T), byteCount);
             }
 
-            throw new TagDismatchException(tag);
-        }
+            T value = default;
 
-        public bool ReadBool()
-        {
-            BooleanTag tag = new BooleanTag(ReadByte());
+            ReadBytes((byte*)&value, byteCount);
 
-            if (tag.IsValid)
+            if (sign == IntegerSign.Negative)
             {
-                return tag.Value;
+                OnesComplement((byte*)&value, sizeof(T));
             }
 
-            throw new TagDismatchException(tag);
+            return value;
         }
 
-        public char ReadChar(CharEncoding encoding)
+        private T ReadUFixedInt<T>(byte index) where T : unmanaged
         {
-            CharTag tag = new CharTag(ReadByte());
-
-            if (tag.MatchValueType(CharValueType.SingleChar, encoding))
+            if (ReadByte() != index)
             {
-                char value = CharTag.CharDefaultValue;
+                OnIndexNotMatch(index);
+                return default;
+            }
 
-                if (!tag.IsDefaultValue)
-                {
-                    switch (encoding)
+            ToFixedIntegerTag(ReadByte(), out ValueTypeCode typeCode, out int byteCount);
+
+            if (typeCode != ValueTypeCode.FixedInteger)
+            {
+                throw new TagDismatchException(ValueTypeCode.FixedInteger, typeCode);
+            }
+
+            if (byteCount != sizeof(T))
+            {
+                throw new TagDismatchException(sizeof(T), byteCount);
+            }
+
+            T value = default;
+
+            ReadBytes((byte*)&value, byteCount);
+
+            return value;
+        }
+
+        private T ReadSFixedInt<T>(byte index) where T : unmanaged
+        {
+            if (ReadByte() != index)
+            {
+                OnIndexNotMatch(index);
+                return default;
+            }
+
+            ToFixedIntegerTag(ReadByte(), out ValueTypeCode typeCode, out int byteCount);
+
+            if (typeCode != ValueTypeCode.FixedInteger)
+            {
+                throw new TagDismatchException(ValueTypeCode.FixedInteger, typeCode);
+            }
+
+            if (byteCount != sizeof(T))
+            {
+                throw new TagDismatchException(sizeof(T), byteCount);
+            }
+
+            T value = default;
+
+            ReadBytes((byte*)&value, byteCount);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public sbyte ReadVariableInt8(byte index)
+        {
+            return ReadSVarInt<sbyte>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public byte ReadVariableUInt8(byte index)
+        {
+            return ReadUVarInt<byte>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public short ReadVariableInt16(byte index)
+        {
+            return ReadSVarInt<short>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public ushort ReadVariableUInt16(byte index)
+        {
+            return ReadUVarInt<ushort>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public int ReadVariableInt32(byte index)
+        {
+            return ReadSVarInt<int>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public uint ReadVariableUInt32(byte index)
+        {
+            return ReadUVarInt<uint>(index);
+        }
+        
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public long ReadVariableInt64(byte index)
+        {
+            return ReadSVarInt<long>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public ulong ReadVariableUInt64(byte index)
+        {
+            return ReadUVarInt<ulong>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public sbyte ReadFixedInt8(byte index)
+        {
+            return ReadSFixedInt<sbyte>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public byte ReadFixedUInt8(byte index)
+        {
+            return ReadUFixedInt<byte>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public short ReadFixedInt16(byte index)
+        {
+            return ReadSFixedInt<short>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public ushort ReadFixedUInt16(byte index)
+        {
+            return ReadUFixedInt<ushort>(index);
+        }
+        
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public int ReadFixedInt32(byte index)
+        {
+            return ReadSFixedInt<int>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public uint ReadFixedUInt32(byte index)
+        {
+            return ReadUFixedInt<uint>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public long ReadFixedInt64(byte index)
+        {
+            return ReadSFixedInt<long>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public ulong ReadFixedUInt64(byte index)
+        {
+            return ReadUFixedInt<ulong>(index);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public bool ReadBool(byte index)
+        {
+            if (ReadByte() != index)
+            {
+                OnIndexNotMatch(index);
+                return default;
+            }
+
+            ToBooleanTag(ReadByte(), out ValueTypeCode typeCode, out bool value);
+
+            if (typeCode != ValueTypeCode.Boolean)
+            {
+                throw new TagDismatchException(ValueTypeCode.Boolean, typeCode);
+            }
+
+            return value;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <param name="encoding"></param>
+        /// <returns></returns>
+        public char ReadChar(byte index, CharEncoding encoding)
+        {
+            if (ReadByte() != index)
+            {
+                OnIndexNotMatch(index);
+                return default;
+            }
+
+            ToCharTag(ReadByte(), out ValueTypeCode typeCode, out CharValueType valueType, out bool isDefaultValue, out CharEncoding e, out _);
+
+            if (typeCode != ValueTypeCode.Char)
+            {
+                throw new TagDismatchException(ValueTypeCode.Char, typeCode);
+            }
+
+            if (valueType != CharValueType.SingleChar)
+            {
+                throw new TagDismatchException(CharValueType.SingleChar, valueType);
+            }
+
+            if (encoding != e)
+            {
+                throw new TagDismatchException(encoding, e);
+            }
+
+            if (isDefaultValue)
+            {
+                return default;
+            }
+
+            char value;
+
+            switch (encoding)
+            {
+                case CharEncoding.Unicode:
+                    ReadBytes((byte*)&value, 2);
+                    break;
+
+                case CharEncoding.ASCII:
+                    byte asciiByte;
+                    asciiByte = ReadByte();
+                    Encoding.ASCII.GetChars(&asciiByte, 1, &value, 1);
+                    break;
+
+                default://case CharEncoding.UTF8:
+                    byte* utf8Byte = stackalloc byte[4];
+                    byte b = *utf8Byte = ReadByte();
+                    int byteCount = 1;
+
+                    if ((b >> 3) == 0x1E)
                     {
-                        case CharEncoding.Unicode:
-                            ReadBytes((byte*)&value, 2);
-                            break;
-
-                        case CharEncoding.ASCII:
-                            byte asciiByte;
-                            asciiByte = ReadByte();
-                            Encoding.ASCII.GetChars(&asciiByte, 1, &value, 1);
-                            break;
-
-                        default://case CharEncoding.UTF8:
-                            byte* utf8Byte = stackalloc byte[4];
-                            byte b = *utf8Byte = ReadByte();
-                            int byteCount = 1;
-
-                            if ((b >> 3) == 0x1E)
-                            {
-                                ReadBytes(utf8Byte + 1, 3);
-                                byteCount = 4;
-                            }
-                            else if ((b >> 4) == 0xE)
-                            {
-                                ReadBytes(utf8Byte + 1, 2);
-                                byteCount = 3;
-                            }
-                            else if ((b >> 5) == 0x6)
-                            {
-                                ReadBytes(utf8Byte + 1, 1);
-                                byteCount = 2;
-                            }
-
-                            Encoding.UTF8.GetChars(utf8Byte, byteCount, &value, 1);
-                            break;
+                        ReadBytes(utf8Byte + 1, 3);
+                        byteCount = 4;
                     }
-                }
-
-                return value;
-            }
-
-            throw new TagDismatchException(tag);
-        }
-
-        public float ReadFloat32()
-        {
-            FloatTag tag = new FloatTag(ReadByte());
-
-            if (tag.MatchTypeCode(ValueTypeCode.Float_32b))
-            {
-                float value = FloatTag.Float32DefaultValue;
-
-                if (!tag.IsDefaultValue)
-                {
-                    ReadBytes(((byte*)&value), 4);
-                }
-
-                return value;
-            }
-
-            throw new TagDismatchException(tag);
-        }
-
-        public double ReadFloat64()
-        {
-            FloatTag tag = new FloatTag(ReadByte());
-
-            if (tag.MatchTypeCode(ValueTypeCode.Float_64b))
-            {
-                double value = FloatTag.Float64DefaultValue;
-
-                if (!tag.IsDefaultValue)
-                {
-                    ReadBytes(((byte*)&value), 8);
-                }
-
-                return value;
-            }
-
-            throw new TagDismatchException(tag);
-        }
-
-        public string ReadString(CharEncoding encoding)
-        {
-            CharTag tag = new CharTag(ReadByte());
-
-            if (tag.MatchValueType(CharValueType.String, encoding))
-            {
-                string value = CharTag.StringDefaultValue;
-
-                if (!tag.IsDefaultValue)
-                {
-                    if (tag.IsEmptyString)
+                    else if ((b >> 4) == 0xE)
                     {
-                        value = string.Empty;
+                        ReadBytes(utf8Byte + 1, 2);
+                        byteCount = 3;
                     }
-                    else
+                    else if ((b >> 5) == 0x6)
                     {
-                        int len = ReadInt32();
-
-                        byte* bs = stackalloc byte[len];
-                        ReadBytes(bs, len);
-
-                        switch (encoding)
-                        {
-                            case CharEncoding.Unicode:
-                                value = Encoding.Unicode.GetString(bs, len);
-                                break;
-
-                            case CharEncoding.ASCII:
-                                value = Encoding.ASCII.GetString(bs, len);
-                                break;
-
-                            default://case CharEncoding.UTF32:
-                                value = Encoding.UTF8.GetString(bs, len);
-                                break;
-                        }
+                        ReadBytes(utf8Byte + 1, 1);
+                        byteCount = 2;
                     }
-                }
 
-                return value;
+                    Encoding.UTF8.GetChars(utf8Byte, byteCount, &value, 1);
+                    break;
             }
 
-            throw new TagDismatchException(tag);
+            return value;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public float ReadFloat32(byte index)
+        {
+            if (ReadByte() != index)
+            {
+                OnIndexNotMatch(index);
+                return default;
+            }
+
+            ToFloatTag(ReadByte(), out ValueTypeCode typeCode, out bool isFloat32, out bool isDefaultValue);
+
+            if (typeCode != ValueTypeCode.Float)
+            {
+                throw new TagDismatchException(ValueTypeCode.Float, typeCode);
+            }
+
+            if (!isFloat32)
+            {
+                throw new TagDismatchException("转换无效(float64 -> float32)");
+            }
+
+            if (isDefaultValue)
+            {
+                return default;
+            }
+
+            float value;
+            ReadBytes(((byte*)&value), 4);
+            return value;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public double ReadFloat64(byte index)
+        {
+            if (ReadByte() != index)
+            {
+                OnIndexNotMatch(index);
+                return default;
+            }
+
+            ToFloatTag(ReadByte(), out ValueTypeCode typeCode, out bool isFloat32, out bool isDefaultValue);
+
+            if (typeCode != ValueTypeCode.Float)
+            {
+                throw new TagDismatchException(ValueTypeCode.Float, typeCode);
+            }
+
+            if (isFloat32)
+            {
+                throw new TagDismatchException("转换无效(float32 -> float64)");
+            }
+
+            if (isDefaultValue)
+            {
+                return default;
+            }
+
+            double value;
+            ReadBytes(((byte*)&value), 8);
+            return value;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <param name="encoding"></param>
+        /// <returns></returns>
+        public string ReadString(byte index, CharEncoding encoding)
+        {
+            if (ReadByte() != index)
+            {
+                OnIndexNotMatch(index);
+                return default;
+            }
+
+            ToCharTag(ReadByte(), out ValueTypeCode typeCode, out CharValueType valueType, out bool isDefaultValue, out CharEncoding e, out bool isEmpty);
+
+            if (typeCode != ValueTypeCode.Char)
+            {
+                throw new TagDismatchException(ValueTypeCode.Char, typeCode);
+            }
+
+            if (valueType != CharValueType.String)
+            {
+                throw new TagDismatchException(CharValueType.String, valueType);
+            }
+
+            if (encoding != e)
+            {
+                throw new TagDismatchException(encoding, e);
+            }
+
+            if (isDefaultValue)
+            {
+                return default;
+            }
+
+            if (isEmpty)
+            {
+                return string.Empty;
+            }
+
+            string value;
+
+            int len = (int)ReadLength();
+
+            byte* bs = stackalloc byte[len];
+            ReadBytes(bs, len);
+
+            switch (encoding)
+            {
+                case CharEncoding.Unicode:
+                    value = Encoding.Unicode.GetString(bs, len);
+                    break;
+
+                case CharEncoding.ASCII:
+                    value = Encoding.ASCII.GetString(bs, len);
+                    break;
+
+                default://case CharEncoding.UTF32:
+                    value = Encoding.UTF8.GetString(bs, len);
+                    break;
+            }
+
+            return value;
         }
     }
 }

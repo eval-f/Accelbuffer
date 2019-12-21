@@ -3,19 +3,34 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace Accelbuffer
 {
-    internal static class SerializeProxyUtility
+    /// <summary>
+    /// 公开对序列化代理运行时注入的接口
+    /// </summary>
+    public static class SerializeProxyUtility
     {
+        private struct FieldData
+        {
+            public readonly FieldInfo Field;
+            public readonly byte Index;
+
+            public FieldData(FieldInfo field, byte index)
+            {
+                Field = field;
+                Index = index;
+            }
+        }
+
         private static readonly ModuleBuilder s_ModuleBuilder;
-        private static readonly AssemblyBuilder s_Builder;
+
+        /// <summary>
+        /// 此属性用于测试，当代理注入功能完成时，将移除该属性
+        /// </summary>
+        public static AssemblyBuilder AssemblyBuilder { get; }//测试结束，移除
 
         private static readonly TypeAttributes s_TypeAttributes;
-
-        private static readonly ConstructorInfo s_IsReadOnlyAttrCtorInfo;
-        private static readonly byte[] s_IsReadOnlyAttrBytes;
 
         private static readonly string s_ParameterName_Obj;
         private static readonly string s_ParameterName_Buffer;
@@ -23,11 +38,12 @@ namespace Accelbuffer
         private static readonly string s_SerializeMethodName;
         private static readonly string s_DeserializeMethodName;
 
-        private static readonly Type[] s_CharEncodingTypes;
+        private static readonly string s_FixedName;
+        private static readonly string s_VariableName;
+
+        private static readonly Type[] s_IndexAndCharEncodingTypes;
+        private static readonly Type[] s_IndexTypes;
         private static readonly Type[] s_InputBufferPtrTypes;
-        private static readonly Type[][] s_EmptyParameterTypeCustomModifiers;
-        private static readonly Type[][] s_ParameterTypeCustomModifiersWith1InAttr;
-        private static readonly Type[][] s_ParameterTypeCustomModifiersWith2InAttr;
 
         private static readonly MethodAttributes s_OverrideMethodAttributes;
 
@@ -35,35 +51,64 @@ namespace Accelbuffer
         {
             AssemblyBuilder builder = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("SerializeProxies.dll"), AssemblyBuilderAccess.RunAndSave);
             s_ModuleBuilder = builder.DefineDynamicModule("SerializeProxies", "SerializeProxies.dll");//测试结束，移除
-            s_Builder = builder;
+            AssemblyBuilder = builder;
 
             //AssemblyBuilder builder = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("SerializeProxies.dll"), AssemblyBuilderAccess.Run);
             //s_ModuleBuilder = builder.DefineDynamicModule("SerializeProxies");
             //s_Builder = builder;
 
             s_TypeAttributes = TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Public | TypeAttributes.BeforeFieldInit;
-
-            s_IsReadOnlyAttrCtorInfo = typeof(IsReadOnlyAttribute).GetConstructor(Type.EmptyTypes);
-            s_IsReadOnlyAttrBytes = new byte[4] { 1, 0, 0, 0 };
-
+            
             s_ParameterName_Obj = "obj";
             s_ParameterName_Buffer = "buffer";
 
             s_SerializeMethodName = "Serialize";
             s_DeserializeMethodName = "Deserialize";
 
-            Type[] inAttrs = new Type[] { typeof(InAttribute) };
+            s_FixedName = "Fixed";
+            s_VariableName = "Variable";
 
-            s_CharEncodingTypes = new Type[] { typeof(CharEncoding) };
+            s_IndexAndCharEncodingTypes = new Type[] { typeof(byte), typeof(CharEncoding) };
+            s_IndexTypes = new Type[] { typeof(byte) };
             s_InputBufferPtrTypes = new Type[] { typeof(InputBuffer*) };
-            s_EmptyParameterTypeCustomModifiers = new Type[][] { };
-            s_ParameterTypeCustomModifiersWith1InAttr = new Type[][] { inAttrs };
-            s_ParameterTypeCustomModifiersWith2InAttr = new Type[][] { inAttrs, inAttrs };
 
             s_OverrideMethodAttributes = MethodAttributes.Private | MethodAttributes.HideBySig | MethodAttributes.Final | MethodAttributes.NewSlot | MethodAttributes.Virtual;
         }
 
-        public static Type GenerateProxy(Type objType, bool ignoreNonPublicField)
+        /// <summary>
+        /// 获取自定义类型(非基元类型)的代理类型
+        /// </summary>
+        /// <param name="objectType">类型对象(非基元类型)</param>
+        /// <param name="proxyType"><see cref="SerializeContractAttribute.ProxyType"/>的值</param>
+        /// <returns>序列化代理的类型</returns>
+        public static Type GetProxyType(Type objectType, Type proxyType)
+        {
+            if (proxyType == null)
+            {
+                proxyType = GenerateProxy(objectType);
+            }
+            else
+            {
+                if (proxyType.IsGenericTypeDefinition)
+                {
+                    proxyType = proxyType.MakeGenericType(objectType.GenericTypeArguments);
+                }
+            }
+
+            return proxyType;
+        }
+
+        internal static Type GetPrimitiveProxyType(Type elementType)
+        {
+            if (elementType == typeof(string))
+            {
+                return typeof(StringSerializeProxy);
+            }
+
+            return typeof(PrimitiveTypeSerializeProxy<>).MakeGenericType(elementType);
+        }
+
+        private static Type GenerateProxy(Type objType)
         {
             string typeName = objType.Name + "SerializeProxy";
 
@@ -73,7 +118,7 @@ namespace Accelbuffer
 
             builder.DefineDefaultConstructor(MethodAttributes.Public);
 
-            objType.GetSerializedFields(ignoreNonPublicField, out List <FieldInfo> fields);
+            objType.GetSerializedFields(out List <FieldData> fields);
 
             DefineSerializeMethod(builder, objType, interfaceType, fields);
 
@@ -82,54 +127,49 @@ namespace Accelbuffer
             return builder.CreateType();
         }
 
-        public static void Save()
+        private static void GetSerializedFields(this Type objType, out List<FieldData> fields)
         {
-            s_Builder.Save("temp.dll");
-        }
-
-        private static void GetSerializedFields(this Type objType, bool ignoreNonPublicField, out List<FieldInfo> fields)
-        {
-            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public;
-
-            if (!ignoreNonPublicField)
-            {
-                flags |= BindingFlags.NonPublic;
-            }
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
             FieldInfo[] allFields = objType.GetFields(flags);
-            fields = new List<FieldInfo>(allFields.Length);
+            fields = new List<FieldData>(allFields.Length);
 
             for (int i = 0; i < allFields.Length; i++)
             {
                 FieldInfo field = allFields[i];
 
-                if (field.GetCustomAttribute<CompilerGeneratedAttribute>() != null || 
-                    field.GetCustomAttribute<IgnoreSerializeAttribute>() != null ||
-                    field.IsInitOnly)
+                if (field.GetCustomAttribute<CompilerGeneratedAttribute>() != null || field.IsInitOnly)
                 {
                     continue;
                 }
 
-                fields.Add(field);
+                SerializedValueAttribute attribute = field.GetCustomAttribute<SerializedValueAttribute>(true);
+
+                if (attribute != null)
+                {
+                    fields.Add(new FieldData(field, attribute.SerializeIndex));
+                }
             }
+
+            fields.Sort((f1, f2) => f1.Index - f2.Index);
         }
 
         private static void EmitEncoding(this ILGenerator il, FieldInfo field)
         {
-            EncodingAttribute attribute = field.GetCustomAttribute<EncodingAttribute>();
+            EncodingAttribute attribute = field.GetCustomAttribute<EncodingAttribute>(true);
             CharEncoding encoding = attribute == null ? CharEncoding.Unicode : attribute.Encoding;
             il.Emit(OpCodes.Ldc_I4, (int)encoding);
         }
 
-        private static void DefineParameter(this MethodBuilder method, int position, string name)
+        private static void EmitIsFixedInteger(this ILGenerator il, FieldInfo field)
         {
-            method.DefineParameter(position, ParameterAttributes.In, name)
-                .SetCustomAttribute(s_IsReadOnlyAttrCtorInfo, s_IsReadOnlyAttrBytes);
+            bool isFixed = field.IsFixedInteger();
+            il.Emit(isFixed ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
         }
 
-        private static bool IsPrimitiveType(this Type type, out bool needEncoding)
+        private static bool IsFixedInteger(this FieldInfo field)
         {
-            return SerializeUtility.IsPrimitiveSerializableTypeInternal(type, out needEncoding);
+            return field.GetCustomAttribute<VariableIntegerAttribute>(true) == null;
         }
 
         private static string GetPrimitiveTypeName(this Type type)
@@ -167,12 +207,14 @@ namespace Accelbuffer
             }
         }
 
-        private static void EmitFieldSerialize(this ILGenerator il, Type objType, FieldInfo field, Type fieldType)
+        private static void EmitFieldSerialize(this ILGenerator il, Type objType, FieldInfo field, Type fieldType, byte index)
         {
-            if (fieldType.IsPrimitiveType(out bool needEncoding))
+            if (SerializeUtility.IsSerializablePrimitiveType(fieldType, out bool needEncoding, out bool isInt))
             {
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldind_I);
+
+                il.Emit(OpCodes.Ldc_I4, (int)index);
 
                 il.Emit(OpCodes.Ldarg_1);
 
@@ -183,12 +225,23 @@ namespace Accelbuffer
 
                 il.Emit(OpCodes.Ldfld, field);
 
+                Type[] argList;
+
                 if (needEncoding)
                 {
                     il.EmitEncoding(field);
+                    argList = new Type[] { typeof(byte), fieldType, typeof(CharEncoding) };
+                }
+                else if (isInt)
+                {
+                    il.EmitIsFixedInteger(field);
+                    argList = new Type[] { typeof(byte), fieldType, typeof(bool) };
+                }
+                else
+                {
+                    argList = new Type[] { typeof(byte), fieldType };
                 }
 
-                Type[] argList = needEncoding ? new Type[] { fieldType, typeof(CharEncoding) } : new Type[] { fieldType };
                 il.Emit(OpCodes.Call, typeof(OutputBuffer).GetMethod("WriteValue", argList));
             }
             else
@@ -197,9 +250,9 @@ namespace Accelbuffer
             }
         }
 
-        private static void EmitFieldDeserialize(this ILGenerator il, Type objType, FieldInfo field, Type fieldType)
+        private static void EmitFieldDeserialize(this ILGenerator il, Type objType, FieldInfo field, Type fieldType, byte index)
         {
-            if (fieldType.IsPrimitiveType(out bool needEncoding))
+            if (SerializeUtility.IsSerializablePrimitiveType(fieldType, out bool needEncoding, out bool isInt))
             {
                 if (objType.IsValueType)
                 {
@@ -213,13 +266,21 @@ namespace Accelbuffer
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Ldind_I);
 
+                il.Emit(OpCodes.Ldc_I4, (int)index);
+
+                string methodName = string.Empty;
+
                 if (needEncoding)
                 {
                     il.EmitEncoding(field);
                 }
+                else if (isInt)
+                {
+                    methodName = (field.IsFixedInteger() ? s_FixedName : s_VariableName);
+                }
 
-                Type[] argList = needEncoding ? s_CharEncodingTypes : Type.EmptyTypes;
-                il.Emit(OpCodes.Call, typeof(InputBuffer).GetMethod("Read" + fieldType.GetPrimitiveTypeName(), argList));
+                Type[] argList = needEncoding ? s_IndexAndCharEncodingTypes : s_IndexTypes;
+                il.Emit(OpCodes.Call, typeof(InputBuffer).GetMethod("Read" + methodName + fieldType.GetPrimitiveTypeName(), argList));
 
                 il.Emit(OpCodes.Stfld, field);
             }
@@ -229,26 +290,22 @@ namespace Accelbuffer
             }
         }
 
-        private static void DefineSerializeMethod(TypeBuilder builder, Type objType, Type interfaceType, List<FieldInfo> fields)
+        private static void DefineSerializeMethod(TypeBuilder builder, Type objType, Type interfaceType, List<FieldData> fields)
         {
             MethodBuilder method = builder.DefineMethod(s_SerializeMethodName,
                                                         s_OverrideMethodAttributes,
                                                         CallingConventions.Standard,
                                                         typeof(void),
-                                                        Type.EmptyTypes,
-                                                        Type.EmptyTypes,
-                                                        new Type[] { objType, typeof(OutputBuffer*) },
-                                                        s_ParameterTypeCustomModifiersWith2InAttr,
-                                                        s_EmptyParameterTypeCustomModifiers);
+                                                        new Type[] { objType, typeof(OutputBuffer*) });
 
-            method.DefineParameter(1, s_ParameterName_Obj);
-            method.DefineParameter(2, s_ParameterName_Buffer);
+            method.DefineParameter(1, ParameterAttributes.In, s_ParameterName_Obj);
+            method.DefineParameter(2, ParameterAttributes.In, s_ParameterName_Buffer);
 
             ILGenerator il = method.GetILGenerator();
 
             for (int i = 0; i < fields.Count; i++)
             {
-                il.EmitFieldSerialize(objType, fields[i], fields[i].FieldType);
+                il.EmitFieldSerialize(objType, fields[i].Field, fields[i].Field.FieldType, fields[i].Index);
             }
 
             il.Emit(OpCodes.Ret);
@@ -256,19 +313,15 @@ namespace Accelbuffer
             builder.DefineMethodOverride(method, interfaceType.GetMethod(s_SerializeMethodName));
         }
 
-        private static void DefineDeserializeMethod(TypeBuilder builder, Type objType, Type interfaceType, List<FieldInfo> fields)
+        private static void DefineDeserializeMethod(TypeBuilder builder, Type objType, Type interfaceType, List<FieldData> fields)
         {
             MethodBuilder method = builder.DefineMethod(s_DeserializeMethodName,
                                                         s_OverrideMethodAttributes,
                                                         CallingConventions.Standard,
                                                         objType,
-                                                        Type.EmptyTypes,
-                                                        Type.EmptyTypes,
-                                                        s_InputBufferPtrTypes,
-                                                        s_ParameterTypeCustomModifiersWith1InAttr,
-                                                        s_EmptyParameterTypeCustomModifiers);
+                                                        s_InputBufferPtrTypes);
 
-            method.DefineParameter(1, s_ParameterName_Buffer);
+            method.DefineParameter(1, ParameterAttributes.In, s_ParameterName_Buffer);
 
             ILGenerator il = method.GetILGenerator();
 
@@ -286,7 +339,7 @@ namespace Accelbuffer
 
             for (int i = 0; i < fields.Count; i++)
             {
-                il.EmitFieldDeserialize(objType, fields[i], fields[i].FieldType);
+                il.EmitFieldDeserialize(objType, fields[i].Field, fields[i].Field.FieldType, fields[i].Index);
             }
 
             if (objType.IsValueType)
