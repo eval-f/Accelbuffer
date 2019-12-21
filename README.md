@@ -122,7 +122,7 @@ public struct UserInput : ISerializeMessageReceiver
 ```
 
 ## 性能对比
-> 执行一百次平均值，可能存在误差
+> 数据不存在JIT的影响，但可能存在允许范围内的部分误差
 
 - 测试类型
 
