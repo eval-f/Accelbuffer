@@ -136,7 +136,8 @@ namespace Accelbuffer
         /// </summary>
         /// <param name="obj">被序列化的对象</param>
         /// <param name="buffer">用于接受序列化数据的缓冲区</param>
-        public static void Serialize(T obj, ArraySegment<byte> buffer)
+        /// <returns>序列化数据的大小</returns>
+        public static int Serialize(T obj, ArraySegment<byte> buffer)
         {
             lock (s_Lock)
             {
@@ -147,9 +148,11 @@ namespace Accelbuffer
 
                 SerializePrivate(obj, s_CachedBuffer);
 
-                s_CachedBuffer->CopyToArray(buffer);
+                int result = (int)s_CachedBuffer->CopyToArray(buffer);
 
                 s_CachedBuffer->Reset();
+
+                return result;
             }
         }
 

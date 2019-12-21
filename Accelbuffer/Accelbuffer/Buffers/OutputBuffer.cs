@@ -103,7 +103,8 @@ namespace Accelbuffer
         /// </summary>
         /// <param name="array">需要被拷贝到的字节数组</param>
         /// <exception cref="ArgumentException">字节数组容量不足</exception>
-        public void CopyToArray(ArraySegment<byte> array)
+        /// <returns>拷贝的字节数量</returns>
+        public long CopyToArray(ArraySegment<byte> array)
         {
             long count = m_ByteCount;
 
@@ -123,6 +124,8 @@ namespace Accelbuffer
                     *p++ = *source++;
                 }
             }
+
+            return m_ByteCount;
         }
 
 
