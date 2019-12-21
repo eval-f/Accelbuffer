@@ -1,5 +1,5 @@
 # Accelbuffer - preview
-`Accelbuffer` 是一个快速，高效的序列化系统，使用纯C#代码实现，利用代理模式完成序列化全部过程。
+`Accelbuffer` 是一个快速，高效的序列化系统，可以用于数据持久化、网络数据传输等。
 
 ## 运行时支持
 * `.NET Framework 4.6+`
@@ -40,7 +40,7 @@ public struct UserInput
 
 #### 方案二，手动实现代理
 ```c#
-[SerializeContract(typeof(UserInputSerializeProxy), InitialBufferSize = 20L)]
+[SerializeContract(typeof(UserInputSerializeProxy), InitialBufferSize = 20L, StrictMode = true)]
 public struct UserInput
 {
   public int CarId;
