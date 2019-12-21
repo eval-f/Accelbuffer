@@ -124,6 +124,28 @@ public struct UserInput : ISerializeMessageReceiver
 ## 性能对比
 - 执行一百次平均值，可能存在误差
 
+- 测试类型
+
+```C#
+[Serializable]
+[SerializeContract(InitialBufferSize = 20L, StrictMode = true)]
+public struct StudentData
+{
+  [SerializedValue(0)] [Encoding(CharEncoding.ASCII)] public string Name;
+  [SerializedValue(1)] [VariableInteger] public int Age;
+  [SerializedValue(2)] [VariableInteger] public int Number;
+  [SerializedValue(3)] public bool IsHighSchoolStudent;
+}
+
+StudentData data = new StudentData
+{
+  Name = "O",
+  Age = 16,
+  Number = 45,
+  IsHighSchoolStudent = false
+};
+```
+
 |序列化器名称|序列化 GC Alloc/B|反序列化 GC Alloc/B|序列化时间/ns|反序列化时间/ns|序列化文件大小/字节|
 |:-:|:-:|:-:|:-:|:-:|:-:|
 |Accelbuffer|85|68|2002|941|13|
