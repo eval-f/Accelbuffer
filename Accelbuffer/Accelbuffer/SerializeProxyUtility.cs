@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Accelbuffer
 {
@@ -41,9 +42,18 @@ namespace Accelbuffer
         private static readonly string s_FixedName;
         private static readonly string s_VariableName;
 
+        private static readonly Type s_IsReadOnlyAttributeType;
+        private static readonly ConstructorInfo s_IsReadOnlyAttributeCtor;
+        private static readonly byte[] s_IsReadOnlyAttributeBytes;
+
         private static readonly Type[] s_IndexAndCharEncodingTypes;
         private static readonly Type[] s_IndexTypes;
         private static readonly Type[] s_InputBufferPtrTypes;
+
+        private static readonly Type[][] s_EmptyTypes1;
+        private static readonly Type[][] s_EmptyTypes2;
+        private static readonly Type[][] s_InAttr1;
+        private static readonly Type[][] s_InAttr2;
 
         private static readonly MethodAttributes s_OverrideMethodAttributes;
 
@@ -58,7 +68,7 @@ namespace Accelbuffer
             //s_Builder = builder;
 
             s_TypeAttributes = TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Public | TypeAttributes.BeforeFieldInit;
-            
+
             s_ParameterName_Obj = "obj";
             s_ParameterName_Buffer = "buffer";
 
@@ -68,47 +78,29 @@ namespace Accelbuffer
             s_FixedName = "Fixed";
             s_VariableName = "Variable";
 
+            s_IsReadOnlyAttributeType = Type.GetType("System.Runtime.CompilerServices.IsReadOnlyAttribute");
+            s_IsReadOnlyAttributeCtor = s_IsReadOnlyAttributeType.GetConstructor(Type.EmptyTypes);
+            s_IsReadOnlyAttributeBytes = new byte[] { 1, 0, 0, 0 };
+
+
             s_IndexAndCharEncodingTypes = new Type[] { typeof(byte), typeof(CharEncoding) };
             s_IndexTypes = new Type[] { typeof(byte) };
-            s_InputBufferPtrTypes = new Type[] { typeof(InputBuffer*) };
+            s_InputBufferPtrTypes = new Type[] { typeof(InputBuffer*).MakeByRefType() };
+
+            s_EmptyTypes1 = new Type[][] { Type.EmptyTypes };
+            s_EmptyTypes2 = new Type[][] { Type.EmptyTypes , Type.EmptyTypes };
+            s_InAttr1 = new Type[][] { new Type[] { typeof(InAttribute) } };
+            s_InAttr2 = new Type[][] { new Type[] { typeof(InAttribute) }, new Type[] { typeof(InAttribute) } };
 
             s_OverrideMethodAttributes = MethodAttributes.Private | MethodAttributes.HideBySig | MethodAttributes.Final | MethodAttributes.NewSlot | MethodAttributes.Virtual;
         }
 
         /// <summary>
-        /// 获取自定义类型(非基元类型)的代理类型
+        /// 注入指定类型对象的序列化代理
         /// </summary>
-        /// <param name="objectType">类型对象(非基元类型)</param>
-        /// <param name="proxyType"><see cref="SerializeContractAttribute.ProxyType"/>的值</param>
-        /// <returns>序列化代理的类型</returns>
-        public static Type GetProxyType(Type objectType, Type proxyType)
-        {
-            if (proxyType == null)
-            {
-                proxyType = GenerateProxy(objectType);
-            }
-            else
-            {
-                if (proxyType.IsGenericTypeDefinition)
-                {
-                    proxyType = proxyType.MakeGenericType(objectType.GenericTypeArguments);
-                }
-            }
-
-            return proxyType;
-        }
-
-        internal static Type GetPrimitiveProxyType(Type elementType)
-        {
-            if (elementType == typeof(string))
-            {
-                return typeof(StringSerializeProxy);
-            }
-
-            return typeof(PrimitiveTypeSerializeProxy<>).MakeGenericType(elementType);
-        }
-
-        private static Type GenerateProxy(Type objType)
+        /// <param name="objType">被序列化的对象类型</param>
+        /// <returns>注入的序列化代理类型</returns>
+        public static Type GenerateProxy(Type objType)
         {
             string typeName = objType.Name + "SerializeProxy";
 
@@ -296,10 +288,13 @@ namespace Accelbuffer
                                                         s_OverrideMethodAttributes,
                                                         CallingConventions.Standard,
                                                         typeof(void),
-                                                        new Type[] { objType, typeof(OutputBuffer*) });
+                                                        Type.EmptyTypes,
+                                                        Type.EmptyTypes,
+                                                        new Type[] { objType.MakeByRefType(), typeof(OutputBuffer*).MakeByRefType() },
+                                                        s_InAttr2, s_EmptyTypes2);
 
-            method.DefineParameter(1, ParameterAttributes.In, s_ParameterName_Obj);
-            method.DefineParameter(2, ParameterAttributes.In, s_ParameterName_Buffer);
+            method.DefineParameter(1, ParameterAttributes.In, s_ParameterName_Obj).SetCustomAttribute(s_IsReadOnlyAttributeCtor, s_IsReadOnlyAttributeBytes);
+            method.DefineParameter(2, ParameterAttributes.In, s_ParameterName_Buffer).SetCustomAttribute(s_IsReadOnlyAttributeCtor, s_IsReadOnlyAttributeBytes);
 
             ILGenerator il = method.GetILGenerator();
 
@@ -319,9 +314,12 @@ namespace Accelbuffer
                                                         s_OverrideMethodAttributes,
                                                         CallingConventions.Standard,
                                                         objType,
-                                                        s_InputBufferPtrTypes);
+                                                        Type.EmptyTypes,
+                                                        Type.EmptyTypes,
+                                                        s_InputBufferPtrTypes,
+                                                        s_InAttr1, s_EmptyTypes1);
 
-            method.DefineParameter(1, ParameterAttributes.In, s_ParameterName_Buffer);
+            method.DefineParameter(1, ParameterAttributes.In, s_ParameterName_Buffer).SetCustomAttribute(s_IsReadOnlyAttributeCtor, s_IsReadOnlyAttributeBytes);
 
             ILGenerator il = method.GetILGenerator();
 

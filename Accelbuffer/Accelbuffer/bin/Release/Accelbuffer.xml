@@ -503,14 +503,6 @@
             此属性用于测试，当代理注入功能完成时，将移除该属性
             </summary>
         </member>
-        <member name="M:Accelbuffer.SerializeProxyUtility.GetProxyType(System.Type,System.Type)">
-            <summary>
-            获取自定义类型(非基元类型)的代理类型
-            </summary>
-            <param name="objectType">类型对象(非基元类型)</param>
-            <param name="proxyType"><see cref="P:Accelbuffer.SerializeContractAttribute.ProxyType"/>的值</param>
-            <returns>序列化代理的类型</returns>
-        </member>
         <member name="T:Accelbuffer.Serializer`1">
             <summary>
             公开序列化<typeparamref name="T"/>类型对象的接口

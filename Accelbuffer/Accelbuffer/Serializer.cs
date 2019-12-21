@@ -42,13 +42,13 @@ namespace Accelbuffer
 
             if (SerializeUtility.IsSerializablePrimitiveType(objectType))
             {
-                proxyType = SerializeProxyUtility.GetPrimitiveProxyType(objectType);
+                proxyType = GetPrimitiveProxyType(objectType);
                 InitialBufferSize = SerializeUtility.GetPrimitiveTypeBufferSize(objectType);
                 StrictMode = false;
             }
             else if (SerializeUtility.IsSerializablePrimitiveCollection(objectType, out Type elementType))
             {
-                proxyType = SerializeProxyUtility.GetPrimitiveProxyType(elementType);
+                proxyType = GetPrimitiveProxyType(elementType);
                 InitialBufferSize = SerializeUtility.GetPrimitiveTypeBufferSize(elementType) << 3;
                 StrictMode = false;
             }
@@ -61,7 +61,7 @@ namespace Accelbuffer
                     throw new SerializationException($"类型{objectType.Name}不能被序列化，因为没有被标记{typeof(SerializeContractAttribute).Name}特性");
                 }
 
-                proxyType = SerializeProxyUtility.GetProxyType(objectType, attr.ProxyType);
+                proxyType = GetProxyType(objectType, attr.ProxyType);
 
                 InitialBufferSize = SerializeUtility.GetBufferSize(objectType, attr.InitialBufferSize);
                 StrictMode = attr.StrictMode;
@@ -75,6 +75,33 @@ namespace Accelbuffer
             s_CachedProxy = (ISerializeProxy<T>)Activator.CreateInstance(proxyType);
             s_CachedBuffer = null;
             s_Lock = new object();
+        }
+
+        private static Type GetProxyType(Type objectType, Type proxyType)
+        {
+            if (proxyType == null)
+            {
+                proxyType = SerializeProxyUtility.GenerateProxy(objectType);
+            }
+            else
+            {
+                if (proxyType.IsGenericTypeDefinition)
+                {
+                    proxyType = proxyType.MakeGenericType(objectType.GenericTypeArguments);
+                }
+            }
+
+            return proxyType;
+        }
+
+        private static Type GetPrimitiveProxyType(Type elementType)
+        {
+            if (elementType == typeof(string))
+            {
+                return typeof(StringSerializeProxy);
+            }
+
+            return typeof(PrimitiveTypeSerializeProxy<>).MakeGenericType(elementType);
         }
 
         private static void InitializeBuffer()
