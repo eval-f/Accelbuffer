@@ -16,18 +16,23 @@
         FixedInteger = 1,
 
         /// <summary>
+        /// 动态长度的浮点数(0-64b)
+        /// </summary>
+        VariableFloat = 2,
+
+        /// <summary>
+        /// 固定长度的浮点数(0b, 32b, 64b)
+        /// </summary>
+        FixedFloat = 3,
+
+        /// <summary>
         /// 布尔值(true or false)
         /// </summary>
-        Boolean = 2,
+        Boolean = 4,
 
         /// <summary>
         /// 字符值(char or string)
         /// </summary>
-        Char = 3,
-
-        /// <summary>
-        /// 浮点数(32b or 64b)
-        /// </summary>
-        Float = 4
+        Char = 5
     }
 }

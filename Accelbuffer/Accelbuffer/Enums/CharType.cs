@@ -3,7 +3,7 @@
     /// <summary>
     /// 字符数据的类型（1位）
     /// </summary>
-    internal enum CharValueType : byte
+    internal enum CharType : byte
     {
         /// <summary>
         /// 表示字符类型是单个字符

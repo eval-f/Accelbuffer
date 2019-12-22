@@ -339,18 +339,13 @@ namespace Accelbuffer
         /// </summary>
         /// <param name="index"></param>
         /// <param name="value"></param>
-        public void WriteValue(byte index, float value)
+        /// <param name="isFixed"></param>
+        public void WriteValue(byte index, float value, bool isFixed)
         {
-            byte tag = MakeFloatTag(value, out bool isDefaultValue);
+            byte tag = isFixed ? MakeFixedFloatTag(value, out int byteCount) : MakeVariableFloatTag(&value, out byteCount);
             WriteByte(index);
             WriteByte(tag);
-
-            if (isDefaultValue)
-            {
-                return;
-            }
-
-            WriteBytes((byte*)&value, 4);
+            WriteBytes((byte*)&value, byteCount);
         }
 
         /// <summary>
@@ -358,18 +353,13 @@ namespace Accelbuffer
         /// </summary>
         /// <param name="index"></param>
         /// <param name="value"></param>
-        public void WriteValue(byte index, double value)
+        /// <param name="isFixed"></param>
+        public void WriteValue(byte index, double value, bool isFixed)
         {
-            byte tag = MakeFloatTag(value, out bool isDefaultValue);
+            byte tag = isFixed ? MakeFixedFloatTag(value, out int byteCount) : MakeVariableFloatTag(&value, out byteCount);
             WriteByte(index);
             WriteByte(tag);
-
-            if (isDefaultValue)
-            {
-                return;
-            }
-
-            WriteBytes((byte*)&value, 8);
+            WriteBytes((byte*)&value, byteCount);
         }
 
         /// <summary>

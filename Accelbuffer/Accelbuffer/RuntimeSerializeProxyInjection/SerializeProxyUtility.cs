@@ -5,7 +5,7 @@ using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace Accelbuffer
+namespace Accelbuffer.Experimental.RuntimeSerializeProxyInjection
 {
     /// <summary>
     /// 公开对序列化代理运行时注入的接口
@@ -29,7 +29,10 @@ namespace Accelbuffer
         /// <summary>
         /// 此属性用于测试，当代理注入功能完成时，将移除该属性
         /// </summary>
-        public static AssemblyBuilder AssemblyBuilder { get; }//测试结束，移除
+        [Obsolete("此属性用于测试，当代理注入功能完成时，将移除该属性", false)]
+        public static AssemblyBuilder AssemblyBuilder => s_AssemblyBuilder;
+
+        private static readonly AssemblyBuilder s_AssemblyBuilder;
 
         private static readonly TypeAttributes s_TypeAttributes;
 
@@ -39,15 +42,10 @@ namespace Accelbuffer
         private static readonly string s_SerializeMethodName;
         private static readonly string s_DeserializeMethodName;
 
-        private static readonly string s_FixedName;
-        private static readonly string s_VariableName;
-
         private static readonly Type s_IsReadOnlyAttributeType;
         private static readonly ConstructorInfo s_IsReadOnlyAttributeCtor;
         private static readonly byte[] s_IsReadOnlyAttributeBytes;
 
-        private static readonly Type[] s_IndexAndCharEncodingTypes;
-        private static readonly Type[] s_IndexTypes;
         private static readonly Type[] s_InputBufferPtrTypes;
 
         private static readonly Type[][] s_EmptyTypes1;
@@ -61,7 +59,7 @@ namespace Accelbuffer
         {
             AssemblyBuilder builder = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("SerializeProxies.dll"), AssemblyBuilderAccess.RunAndSave);
             s_ModuleBuilder = builder.DefineDynamicModule("SerializeProxies", "SerializeProxies.dll");//测试结束，移除
-            AssemblyBuilder = builder;
+            s_AssemblyBuilder = builder;
 
             //AssemblyBuilder builder = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("SerializeProxies.dll"), AssemblyBuilderAccess.Run);
             //s_ModuleBuilder = builder.DefineDynamicModule("SerializeProxies");
@@ -75,20 +73,14 @@ namespace Accelbuffer
             s_SerializeMethodName = "Serialize";
             s_DeserializeMethodName = "Deserialize";
 
-            s_FixedName = "Fixed";
-            s_VariableName = "Variable";
-
             s_IsReadOnlyAttributeType = Type.GetType("System.Runtime.CompilerServices.IsReadOnlyAttribute");
             s_IsReadOnlyAttributeCtor = s_IsReadOnlyAttributeType.GetConstructor(Type.EmptyTypes);
             s_IsReadOnlyAttributeBytes = new byte[] { 1, 0, 0, 0 };
 
-
-            s_IndexAndCharEncodingTypes = new Type[] { typeof(byte), typeof(CharEncoding) };
-            s_IndexTypes = new Type[] { typeof(byte) };
             s_InputBufferPtrTypes = new Type[] { typeof(InputBuffer*).MakeByRefType() };
 
             s_EmptyTypes1 = new Type[][] { Type.EmptyTypes };
-            s_EmptyTypes2 = new Type[][] { Type.EmptyTypes , Type.EmptyTypes };
+            s_EmptyTypes2 = new Type[][] { Type.EmptyTypes, Type.EmptyTypes };
             s_InAttr1 = new Type[][] { new Type[] { typeof(InAttribute) } };
             s_InAttr2 = new Type[][] { new Type[] { typeof(InAttribute) }, new Type[] { typeof(InAttribute) } };
 
@@ -110,7 +102,7 @@ namespace Accelbuffer
 
             builder.DefineDefaultConstructor(MethodAttributes.Public);
 
-            objType.GetSerializedFields(out List <FieldData> fields);
+            objType.GetSerializedFields(out List<FieldData> fields);
 
             DefineSerializeMethod(builder, objType, interfaceType, fields);
 
@@ -135,7 +127,7 @@ namespace Accelbuffer
                     continue;
                 }
 
-                SerializedValueAttribute attribute = field.GetCustomAttribute<SerializedValueAttribute>(true);
+                SerializeIndexAttribute attribute = field.GetCustomAttribute<SerializeIndexAttribute>(true);
 
                 if (attribute != null)
                 {
@@ -144,142 +136,6 @@ namespace Accelbuffer
             }
 
             fields.Sort((f1, f2) => f1.Index - f2.Index);
-        }
-
-        private static void EmitEncoding(this ILGenerator il, FieldInfo field)
-        {
-            EncodingAttribute attribute = field.GetCustomAttribute<EncodingAttribute>(true);
-            CharEncoding encoding = attribute == null ? CharEncoding.Unicode : attribute.Encoding;
-            il.Emit(OpCodes.Ldc_I4, (int)encoding);
-        }
-
-        private static void EmitIsFixedInteger(this ILGenerator il, FieldInfo field)
-        {
-            bool isFixed = field.IsFixedInteger();
-            il.Emit(isFixed ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        }
-
-        private static bool IsFixedInteger(this FieldInfo field)
-        {
-            return field.GetCustomAttribute<VariableIntegerAttribute>(true) == null;
-        }
-
-        private static string GetPrimitiveTypeName(this Type type)
-        {
-            switch (Type.GetTypeCode(type))
-            {
-                case TypeCode.SByte:
-                    return "Int8";
-                case TypeCode.Byte:
-                    return "UInt8";
-                case TypeCode.Int16:
-                    return "Int16";
-                case TypeCode.UInt16:
-                    return "UInt16";
-                case TypeCode.Int32:
-                    return "Int32";
-                case TypeCode.UInt32:
-                    return "UInt32";
-                case TypeCode.Int64:
-                    return "Int64";
-                case TypeCode.UInt64:
-                    return "UInt64";
-                case TypeCode.Single:
-                    return "Float32";
-                case TypeCode.Double:
-                    return "Float64";
-                case TypeCode.Boolean:
-                    return "Bool";
-                case TypeCode.Char:
-                    return "Char";
-                case TypeCode.String:
-                    return "String";
-                default:
-                    return string.Empty;
-            }
-        }
-
-        private static void EmitFieldSerialize(this ILGenerator il, Type objType, FieldInfo field, Type fieldType, byte index)
-        {
-            if (SerializeUtility.IsSerializablePrimitiveType(fieldType, out bool needEncoding, out bool isInt))
-            {
-                il.Emit(OpCodes.Ldarg_2);
-                il.Emit(OpCodes.Ldind_I);
-
-                il.Emit(OpCodes.Ldc_I4, (int)index);
-
-                il.Emit(OpCodes.Ldarg_1);
-
-                if (!objType.IsValueType)
-                {
-                    il.Emit(OpCodes.Ldind_Ref);
-                }
-
-                il.Emit(OpCodes.Ldfld, field);
-
-                Type[] argList;
-
-                if (needEncoding)
-                {
-                    il.EmitEncoding(field);
-                    argList = new Type[] { typeof(byte), fieldType, typeof(CharEncoding) };
-                }
-                else if (isInt)
-                {
-                    il.EmitIsFixedInteger(field);
-                    argList = new Type[] { typeof(byte), fieldType, typeof(bool) };
-                }
-                else
-                {
-                    argList = new Type[] { typeof(byte), fieldType };
-                }
-
-                il.Emit(OpCodes.Call, typeof(OutputBuffer).GetMethod("WriteValue", argList));
-            }
-            else
-            {
-
-            }
-        }
-
-        private static void EmitFieldDeserialize(this ILGenerator il, Type objType, FieldInfo field, Type fieldType, byte index)
-        {
-            if (SerializeUtility.IsSerializablePrimitiveType(fieldType, out bool needEncoding, out bool isInt))
-            {
-                if (objType.IsValueType)
-                {
-                    il.Emit(OpCodes.Ldloca_S, (byte)0);
-                }
-                else
-                {
-                    il.Emit(OpCodes.Dup);
-                }
-
-                il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Ldind_I);
-
-                il.Emit(OpCodes.Ldc_I4, (int)index);
-
-                string methodName = string.Empty;
-
-                if (needEncoding)
-                {
-                    il.EmitEncoding(field);
-                }
-                else if (isInt)
-                {
-                    methodName = (field.IsFixedInteger() ? s_FixedName : s_VariableName);
-                }
-
-                Type[] argList = needEncoding ? s_IndexAndCharEncodingTypes : s_IndexTypes;
-                il.Emit(OpCodes.Call, typeof(InputBuffer).GetMethod("Read" + methodName + fieldType.GetPrimitiveTypeName(), argList));
-
-                il.Emit(OpCodes.Stfld, field);
-            }
-            else
-            {
-
-            }
         }
 
         private static void DefineSerializeMethod(TypeBuilder builder, Type objType, Type interfaceType, List<FieldData> fields)

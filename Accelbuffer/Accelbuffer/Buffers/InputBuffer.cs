@@ -16,11 +16,11 @@ namespace Accelbuffer
         private bool m_StrictMode;
 
         /// <summary>
-        /// 
+        /// 使用指定的字节指针床垫输入缓冲区
         /// </summary>
-        /// <param name="source"></param>
-        /// <param name="size"></param>
-        /// <param name="strictMode"></param>
+        /// <param name="source">指向一个字节数组的指针</param>
+        /// <param name="size">缓冲区可以读取的字节数量</param>
+        /// <param name="strictMode">是否启用严格模式（开启对序列化索引不匹配的错误警告）</param>
         public InputBuffer(byte* source, long size, bool strictMode)
         {
             m_Buffer = source;
@@ -79,13 +79,13 @@ namespace Accelbuffer
 
         private uint ReadLength()
         {
-            ToVariableIntegerTag(ReadByte(), out _, out _, out int byteCount);
+            ToVariableNumberTag(ReadByte(), out _, out _, out int byteCount);
             uint value = default;
             ReadBytes((byte*)&value, byteCount);
             return value;
         }
 
-        private T ReadUVarInt<T>(byte index) where T : unmanaged
+        private T ReadUVarNumber<T>(byte index, ValueTypeCode expected) where T : unmanaged
         {
             if (ReadByte() != index)
             {
@@ -93,16 +93,16 @@ namespace Accelbuffer
                 return default;
             }
 
-            ToVariableIntegerTag(ReadByte(), out ValueTypeCode typeCode, out IntegerSign sign, out int byteCount);
+            ToVariableNumberTag(ReadByte(), out ValueTypeCode typeCode, out NumberSign sign, out int byteCount);
 
-            if (typeCode != ValueTypeCode.VariableInteger)
+            if (typeCode != expected)
             {
-                throw new TagDismatchException(ValueTypeCode.VariableInteger, typeCode);
+                throw new TagDismatchException(expected, typeCode);
             }
 
-            if (sign != IntegerSign.PositiveOrUnsigned)
+            if (sign != NumberSign.PositiveOrUnsigned)
             {
-                throw new TagDismatchException(IntegerSign.PositiveOrUnsigned, sign);
+                throw new TagDismatchException(NumberSign.PositiveOrUnsigned, sign);
             }
 
             if (byteCount > sizeof(T))
@@ -117,7 +117,7 @@ namespace Accelbuffer
             return value;
         }
 
-        private T ReadSVarInt<T>(byte index) where T : unmanaged
+        private T ReadSVarNumber<T>(byte index, ValueTypeCode expected) where T : unmanaged
         {
             if (ReadByte() != index)
             {
@@ -125,11 +125,11 @@ namespace Accelbuffer
                 return default;
             }
 
-            ToVariableIntegerTag(ReadByte(), out ValueTypeCode typeCode, out IntegerSign sign, out int byteCount);
+            ToVariableNumberTag(ReadByte(), out ValueTypeCode typeCode, out NumberSign sign, out int byteCount);
 
-            if (typeCode != ValueTypeCode.VariableInteger)
+            if (typeCode != expected)
             {
-                throw new TagDismatchException(ValueTypeCode.VariableInteger, typeCode);
+                throw new TagDismatchException(expected, typeCode);
             }
 
             if (byteCount > sizeof(T))
@@ -141,7 +141,7 @@ namespace Accelbuffer
 
             ReadBytes((byte*)&value, byteCount);
 
-            if (sign == IntegerSign.Negative)
+            if (sign == NumberSign.Negative)
             {
                 OnesComplement((byte*)&value, sizeof(T));
             }
@@ -149,7 +149,7 @@ namespace Accelbuffer
             return value;
         }
 
-        private T ReadUFixedInt<T>(byte index) where T : unmanaged
+        private T ReadFixedNumber<T>(byte index, ValueTypeCode expected) where T : unmanaged
         {
             if (ReadByte() != index)
             {
@@ -157,41 +157,14 @@ namespace Accelbuffer
                 return default;
             }
 
-            ToFixedIntegerTag(ReadByte(), out ValueTypeCode typeCode, out int byteCount);
+            ToFixedNumberTag(ReadByte(), out ValueTypeCode typeCode, out int byteCount);
 
-            if (typeCode != ValueTypeCode.FixedInteger)
+            if (typeCode != expected)
             {
-                throw new TagDismatchException(ValueTypeCode.FixedInteger, typeCode);
+                throw new TagDismatchException(expected, typeCode);
             }
 
-            if (byteCount != sizeof(T))
-            {
-                throw new TagDismatchException(sizeof(T), byteCount);
-            }
-
-            T value = default;
-
-            ReadBytes((byte*)&value, byteCount);
-
-            return value;
-        }
-
-        private T ReadSFixedInt<T>(byte index) where T : unmanaged
-        {
-            if (ReadByte() != index)
-            {
-                OnIndexNotMatch(index);
-                return default;
-            }
-
-            ToFixedIntegerTag(ReadByte(), out ValueTypeCode typeCode, out int byteCount);
-
-            if (typeCode != ValueTypeCode.FixedInteger)
-            {
-                throw new TagDismatchException(ValueTypeCode.FixedInteger, typeCode);
-            }
-
-            if (byteCount != sizeof(T))
+            if (byteCount != sizeof(T) && byteCount != 0)
             {
                 throw new TagDismatchException(sizeof(T), byteCount);
             }
@@ -210,7 +183,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public sbyte ReadVariableInt8(byte index)
         {
-            return ReadSVarInt<sbyte>(index);
+            return ReadSVarNumber<sbyte>(index, ValueTypeCode.VariableInteger);
         }
 
         /// <summary>
@@ -220,7 +193,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public byte ReadVariableUInt8(byte index)
         {
-            return ReadUVarInt<byte>(index);
+            return ReadUVarNumber<byte>(index, ValueTypeCode.VariableInteger);
         }
 
         /// <summary>
@@ -230,7 +203,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public short ReadVariableInt16(byte index)
         {
-            return ReadSVarInt<short>(index);
+            return ReadSVarNumber<short>(index, ValueTypeCode.VariableInteger);
         }
 
         /// <summary>
@@ -240,7 +213,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public ushort ReadVariableUInt16(byte index)
         {
-            return ReadUVarInt<ushort>(index);
+            return ReadUVarNumber<ushort>(index, ValueTypeCode.VariableInteger);
         }
 
         /// <summary>
@@ -250,7 +223,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public int ReadVariableInt32(byte index)
         {
-            return ReadSVarInt<int>(index);
+            return ReadSVarNumber<int>(index, ValueTypeCode.VariableInteger);
         }
 
         /// <summary>
@@ -260,7 +233,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public uint ReadVariableUInt32(byte index)
         {
-            return ReadUVarInt<uint>(index);
+            return ReadUVarNumber<uint>(index, ValueTypeCode.VariableInteger);
         }
         
         /// <summary>
@@ -270,7 +243,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public long ReadVariableInt64(byte index)
         {
-            return ReadSVarInt<long>(index);
+            return ReadSVarNumber<long>(index, ValueTypeCode.VariableInteger);
         }
 
         /// <summary>
@@ -280,7 +253,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public ulong ReadVariableUInt64(byte index)
         {
-            return ReadUVarInt<ulong>(index);
+            return ReadUVarNumber<ulong>(index, ValueTypeCode.VariableInteger);
         }
 
         /// <summary>
@@ -290,7 +263,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public sbyte ReadFixedInt8(byte index)
         {
-            return ReadSFixedInt<sbyte>(index);
+            return ReadFixedNumber<sbyte>(index, ValueTypeCode.FixedInteger);
         }
 
         /// <summary>
@@ -300,7 +273,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public byte ReadFixedUInt8(byte index)
         {
-            return ReadUFixedInt<byte>(index);
+            return ReadFixedNumber<byte>(index, ValueTypeCode.FixedInteger);
         }
 
         /// <summary>
@@ -310,7 +283,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public short ReadFixedInt16(byte index)
         {
-            return ReadSFixedInt<short>(index);
+            return ReadFixedNumber<short>(index, ValueTypeCode.FixedInteger);
         }
 
         /// <summary>
@@ -320,7 +293,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public ushort ReadFixedUInt16(byte index)
         {
-            return ReadUFixedInt<ushort>(index);
+            return ReadFixedNumber<ushort>(index, ValueTypeCode.FixedInteger);
         }
         
         /// <summary>
@@ -330,7 +303,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public int ReadFixedInt32(byte index)
         {
-            return ReadSFixedInt<int>(index);
+            return ReadFixedNumber<int>(index, ValueTypeCode.FixedInteger);
         }
 
         /// <summary>
@@ -340,7 +313,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public uint ReadFixedUInt32(byte index)
         {
-            return ReadUFixedInt<uint>(index);
+            return ReadFixedNumber<uint>(index, ValueTypeCode.FixedInteger);
         }
 
         /// <summary>
@@ -350,7 +323,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public long ReadFixedInt64(byte index)
         {
-            return ReadSFixedInt<long>(index);
+            return ReadFixedNumber<long>(index, ValueTypeCode.FixedInteger);
         }
 
         /// <summary>
@@ -360,7 +333,7 @@ namespace Accelbuffer
         /// <returns></returns>
         public ulong ReadFixedUInt64(byte index)
         {
-            return ReadUFixedInt<ulong>(index);
+            return ReadFixedNumber<ulong>(index, ValueTypeCode.FixedInteger);
         }
 
         /// <summary>
@@ -368,7 +341,7 @@ namespace Accelbuffer
         /// </summary>
         /// <param name="index"></param>
         /// <returns></returns>
-        public bool ReadBool(byte index)
+        public bool ReadBoolean(byte index)
         {
             if (ReadByte() != index)
             {
@@ -400,16 +373,16 @@ namespace Accelbuffer
                 return default;
             }
 
-            ToCharTag(ReadByte(), out ValueTypeCode typeCode, out CharValueType valueType, out bool isDefaultValue, out CharEncoding e, out _);
+            ToCharTag(ReadByte(), out ValueTypeCode typeCode, out CharType valueType, out bool isDefaultValue, out CharEncoding e, out _);
 
             if (typeCode != ValueTypeCode.Char)
             {
                 throw new TagDismatchException(ValueTypeCode.Char, typeCode);
             }
 
-            if (valueType != CharValueType.SingleChar)
+            if (valueType != CharType.SingleChar)
             {
-                throw new TagDismatchException(CharValueType.SingleChar, valueType);
+                throw new TagDismatchException(CharType.SingleChar, valueType);
             }
 
             if (encoding != e)
@@ -469,34 +442,9 @@ namespace Accelbuffer
         /// </summary>
         /// <param name="index"></param>
         /// <returns></returns>
-        public float ReadFloat32(byte index)
+        public float ReadVariableFloat32(byte index)
         {
-            if (ReadByte() != index)
-            {
-                OnIndexNotMatch(index);
-                return default;
-            }
-
-            ToFloatTag(ReadByte(), out ValueTypeCode typeCode, out bool isFloat32, out bool isDefaultValue);
-
-            if (typeCode != ValueTypeCode.Float)
-            {
-                throw new TagDismatchException(ValueTypeCode.Float, typeCode);
-            }
-
-            if (!isFloat32)
-            {
-                throw new TagDismatchException("转换无效(float64 -> float32)");
-            }
-
-            if (isDefaultValue)
-            {
-                return default;
-            }
-
-            float value;
-            ReadBytes(((byte*)&value), 4);
-            return value;
+            return ReadUVarNumber<float>(index, ValueTypeCode.VariableFloat);
         }
 
         /// <summary>
@@ -504,34 +452,29 @@ namespace Accelbuffer
         /// </summary>
         /// <param name="index"></param>
         /// <returns></returns>
-        public double ReadFloat64(byte index)
+        public double ReadVariableFloat64(byte index)
         {
-            if (ReadByte() != index)
-            {
-                OnIndexNotMatch(index);
-                return default;
-            }
+            return ReadUVarNumber<double>(index, ValueTypeCode.VariableFloat);
+        }
 
-            ToFloatTag(ReadByte(), out ValueTypeCode typeCode, out bool isFloat32, out bool isDefaultValue);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public float ReadFixedFloat32(byte index)
+        {
+            return ReadFixedNumber<float>(index, ValueTypeCode.FixedFloat);
+        }
 
-            if (typeCode != ValueTypeCode.Float)
-            {
-                throw new TagDismatchException(ValueTypeCode.Float, typeCode);
-            }
-
-            if (isFloat32)
-            {
-                throw new TagDismatchException("转换无效(float32 -> float64)");
-            }
-
-            if (isDefaultValue)
-            {
-                return default;
-            }
-
-            double value;
-            ReadBytes(((byte*)&value), 8);
-            return value;
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public double ReadFixedFloat64(byte index)
+        {
+            return ReadFixedNumber<double>(index, ValueTypeCode.FixedFloat);
         }
 
         /// <summary>
@@ -548,16 +491,16 @@ namespace Accelbuffer
                 return default;
             }
 
-            ToCharTag(ReadByte(), out ValueTypeCode typeCode, out CharValueType valueType, out bool isDefaultValue, out CharEncoding e, out bool isEmpty);
+            ToCharTag(ReadByte(), out ValueTypeCode typeCode, out CharType valueType, out bool isDefaultValue, out CharEncoding e, out bool isEmpty);
 
             if (typeCode != ValueTypeCode.Char)
             {
                 throw new TagDismatchException(ValueTypeCode.Char, typeCode);
             }
 
-            if (valueType != CharValueType.String)
+            if (valueType != CharType.String)
             {
-                throw new TagDismatchException(CharValueType.String, valueType);
+                throw new TagDismatchException(CharType.String, valueType);
             }
 
             if (encoding != e)

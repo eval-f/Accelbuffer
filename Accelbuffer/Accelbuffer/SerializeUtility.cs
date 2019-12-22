@@ -10,9 +10,9 @@ namespace Accelbuffer
         private const long DEFAULT_INITIAL_BUFFER_SIZE = 20L;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static IntegerSign GetSign(byte* value)
+        public static NumberSign GetSign(byte* value)
         {
-            return (IntegerSign)((*value) >> 7 & 0x1);
+            return (NumberSign)((*value) >> 7 & 0x1);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -42,10 +42,12 @@ namespace Accelbuffer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void OnesComplement(byte* value, int size)
         {
-            while (size > 0)
+            switch (size)
             {
-                *value++ = (byte)~*value;
-                size--;
+                case 1: OnesComplement((sbyte*)value); break;
+                case 2: OnesComplement((short*)value); break;
+                case 4: OnesComplement((int*)value); break;
+                case 8: OnesComplement((long*)value); break;
             }
         }
 
@@ -73,7 +75,8 @@ namespace Accelbuffer
             return type == null ? false : IsSerializablePrimitiveType(type, out _, out _);
         }
 
-        public static bool IsSerializablePrimitiveType(Type type, out bool needEncoding, out bool isInt)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsSerializablePrimitiveType(Type type, out bool isChar, out bool isNumber)
         {
             switch (Type.GetTypeCode(type))
             {
@@ -85,27 +88,28 @@ namespace Accelbuffer
                 case TypeCode.UInt32:
                 case TypeCode.Int64:
                 case TypeCode.UInt64:
-                    needEncoding = false;
-                    isInt = true;
-                    return true;
                 case TypeCode.Single:
                 case TypeCode.Double:
+                    isChar = false;
+                    isNumber = true;
+                    return true;
                 case TypeCode.Boolean:
-                    needEncoding = false;
-                    isInt = false;
+                    isChar = false;
+                    isNumber = false;
                     return true;
                 case TypeCode.Char:
                 case TypeCode.String:
-                    needEncoding = true;
-                    isInt = false;
+                    isChar = true;
+                    isNumber = false;
                     return true;
                 default:
-                    needEncoding = false;
-                    isInt = false;
+                    isChar = false;
+                    isNumber = false;
                     return false;
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsSerializablePrimitiveCollection(Type objectType, out Type elementType)
         {
             elementType = null;

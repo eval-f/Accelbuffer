@@ -11,11 +11,13 @@ namespace Accelbuffer
 
         //boolean          tag; [type_code(3b) + value(1b) + reserved(4b)]
 
-        //char             tag; [type_code(3b) + char_value_type(1b) + is_default_value(1b) + char_encoding(2b) + is_empty_string(1b)]
+        //char             tag; [type_code(3b) + char_type(1b) + is_default_value(1b) + char_encoding(2b) + is_empty_string(1b)]
 
-        //float            tag; [type_code(3b) + is_float32(1b) + is_default_value(1b) + reserved(3b)]
+        //variable float   tag; [type_code(3b) + number_sign(1b) + byte_count(4b)]
 
-        //variable integer tag; [type_code(3b) + int_sign(1b) + byte_count(4b)]
+        //fixed float      tag; [type_code(3b) + byte_count(4b) + reserved(1b)]
+
+        //variable integer tag; [type_code(3b) + number_sign(1b) + byte_count(4b)]
 
         //fixed integer    tag; [type_code(3b) + byte_count(4b) + reserved(1b)]
 
@@ -31,7 +33,7 @@ namespace Accelbuffer
         {
             isDefaultValue = value == default;
             return (byte)(((int)ValueTypeCode.Char << 5)
-                          | ((int)CharValueType.SingleChar << 4)
+                          | ((int)CharType.SingleChar << 4)
                           | ((isDefaultValue ? 1 : 0) << 3)
                           | ((int)encoding << 1));
         }
@@ -42,32 +44,46 @@ namespace Accelbuffer
             isDefaultValue = value == default;
             isEmpty = value == string.Empty;
             return (byte)(((int)ValueTypeCode.Char << 5)
-                          | ((int)CharValueType.String << 4)
+                          | ((int)CharType.String << 4)
                           | ((isDefaultValue ? 1 : 0) << 3)
                           | ((int)encoding << 1)
                           | (isEmpty ? 1 : 0));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static byte MakeFloatTag(float value, out bool isDefaultValue)
+        public static byte MakeVariableFloatTag(float* value, out int byteCount)
         {
-            isDefaultValue = value == default;
-            return (byte)(((int)ValueTypeCode.Float << 5) | (1 << 4) | ((isDefaultValue ? 1 : 0) << 3));
+            byteCount = SerializeUtility.GetUsedByteCount((byte*)value, 4);
+            return (byte)(((int)ValueTypeCode.VariableFloat << 5) | ((int)NumberSign.PositiveOrUnsigned << 4) | byteCount);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static byte MakeFloatTag(double value, out bool isDefaultValue)
+        public static byte MakeVariableFloatTag(double* value, out int byteCount)
         {
-            isDefaultValue = value == default;
-            return (byte)(((int)ValueTypeCode.Float << 5) | ((isDefaultValue ? 1 : 0) << 3));
+            byteCount = SerializeUtility.GetUsedByteCount((byte*)value, 8);
+            return (byte)(((int)ValueTypeCode.VariableFloat << 5) | ((int)NumberSign.PositiveOrUnsigned << 4) | byteCount);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static byte MakeFixedFloatTag(float value, out int byteCount)
+        {
+            byteCount = value == default ? 0 : 4;
+            return (byte)(((int)ValueTypeCode.FixedFloat << 5) | (byteCount << 1));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static byte MakeFixedFloatTag(double value, out int byteCount)
+        {
+            byteCount = value == default ? 0 : 8;
+            return (byte)(((int)ValueTypeCode.FixedFloat << 5) | (byteCount << 1));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte MakeVariableIntegerTag(sbyte* value, out int byteCount)
         {
-            IntegerSign sgn = SerializeUtility.GetSign((byte*)value);
+            NumberSign sgn = SerializeUtility.GetSign((byte*)value);
 
-            if (sgn == IntegerSign.Negative)
+            if (sgn == NumberSign.Negative)
             {
                 SerializeUtility.OnesComplement(value);
             }
@@ -81,15 +97,15 @@ namespace Accelbuffer
         public static byte MakeVariableIntegerTag(byte* value, out int byteCount)
         {
             byteCount = SerializeUtility.GetUsedByteCount(value, 1);
-            return (byte)(((int)ValueTypeCode.VariableInteger << 5) | ((int)IntegerSign.PositiveOrUnsigned << 4) | byteCount);
+            return (byte)(((int)ValueTypeCode.VariableInteger << 5) | ((int)NumberSign.PositiveOrUnsigned << 4) | byteCount);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte MakeVariableIntegerTag(short* value, out int byteCount)
         {
-            IntegerSign sgn = SerializeUtility.GetSign((byte*)value);
+            NumberSign sgn = SerializeUtility.GetSign((byte*)value);
 
-            if (sgn == IntegerSign.Negative)
+            if (sgn == NumberSign.Negative)
             {
                 SerializeUtility.OnesComplement(value);
             }
@@ -103,15 +119,15 @@ namespace Accelbuffer
         public static byte MakeVariableIntegerTag(ushort* value, out int byteCount)
         {
             byteCount = SerializeUtility.GetUsedByteCount((byte*)value, 2);
-            return (byte)(((int)ValueTypeCode.VariableInteger << 5) | ((int)IntegerSign.PositiveOrUnsigned << 4) | byteCount);
+            return (byte)(((int)ValueTypeCode.VariableInteger << 5) | ((int)NumberSign.PositiveOrUnsigned << 4) | byteCount);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte MakeVariableIntegerTag(int* value, out int byteCount)
         {
-            IntegerSign sgn = SerializeUtility.GetSign((byte*)value);
+            NumberSign sgn = SerializeUtility.GetSign((byte*)value);
 
-            if (sgn == IntegerSign.Negative)
+            if (sgn == NumberSign.Negative)
             {
                 SerializeUtility.OnesComplement(value);
             }
@@ -125,15 +141,15 @@ namespace Accelbuffer
         public static byte MakeVariableIntegerTag(uint* value, out int byteCount)
         {
             byteCount = SerializeUtility.GetUsedByteCount((byte*)value, 4);
-            return (byte)(((int)ValueTypeCode.VariableInteger << 5) | ((int)IntegerSign.PositiveOrUnsigned << 4) | byteCount);
+            return (byte)(((int)ValueTypeCode.VariableInteger << 5) | ((int)NumberSign.PositiveOrUnsigned << 4) | byteCount);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte MakeVariableIntegerTag(long* value, out int byteCount)
         {
-            IntegerSign sgn = SerializeUtility.GetSign((byte*)value);
+            NumberSign sgn = SerializeUtility.GetSign((byte*)value);
 
-            if (sgn == IntegerSign.Negative)
+            if (sgn == NumberSign.Negative)
             {
                 SerializeUtility.OnesComplement(value);
             }
@@ -147,7 +163,7 @@ namespace Accelbuffer
         public static byte MakeVariableIntegerTag(ulong* value, out int byteCount)
         {
             byteCount = SerializeUtility.GetUsedByteCount((byte*)value, 8);
-            return (byte)(((int)ValueTypeCode.VariableInteger << 5) | ((int)IntegerSign.PositiveOrUnsigned << 4) | byteCount);
+            return (byte)(((int)ValueTypeCode.VariableInteger << 5) | ((int)NumberSign.PositiveOrUnsigned << 4) | byteCount);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -215,33 +231,25 @@ namespace Accelbuffer
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ToCharTag(byte tag, out ValueTypeCode typeCode, out CharValueType valueType, out bool isDefaultValue, out CharEncoding encoding, out bool isEmptyString)
+        public static void ToCharTag(byte tag, out ValueTypeCode typeCode, out CharType valueType, out bool isDefaultValue, out CharEncoding encoding, out bool isEmptyString)
         {
             typeCode = (ValueTypeCode)(tag >> 5);
-            valueType = (CharValueType)((tag >> 4) & 0x1);
+            valueType = (CharType)((tag >> 4) & 0x1);
             isDefaultValue = ((tag >> 3) & 0x1) == 1;
             encoding = (CharEncoding)((tag >> 1) & 0x3);
             isEmptyString = (tag & 0x1) == 1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ToFloatTag(byte tag, out ValueTypeCode typeCode, out bool isFloat32, out bool isDefaultValue)
+        public static void ToVariableNumberTag(byte tag, out ValueTypeCode typeCode, out NumberSign sign, out int byteCount)
         {
             typeCode = (ValueTypeCode)(tag >> 5);
-            isFloat32 = ((tag >> 4) & 0x1) == 1;
-            isDefaultValue = ((tag >> 3) & 0x1) == 1;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ToVariableIntegerTag(byte tag, out ValueTypeCode typeCode, out IntegerSign sign, out int byteCount)
-        {
-            typeCode = (ValueTypeCode)(tag >> 5);
-            sign = (IntegerSign)((tag >> 4) & 0x1);
+            sign = (NumberSign)((tag >> 4) & 0x1);
             byteCount = tag & 0xF;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ToFixedIntegerTag(byte tag, out ValueTypeCode typeCode, out int byteCount)
+        public static void ToFixedNumberTag(byte tag, out ValueTypeCode typeCode, out int byteCount)
         {
             typeCode = (ValueTypeCode)(tag >> 5);
             byteCount = (tag >> 1) & 0xF;

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Accelbuffer
+namespace Accelbuffer.Experimental.RuntimeSerializeProxyInjection
 {
     /// <summary>
     /// 指示字段使用指定的编码被序列化，该特性只对 <see cref="char"/> 和 <see cref="string"/> 类型的字段有效

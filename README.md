@@ -6,19 +6,19 @@
 * `/unsafe`
 
 ## 特点
-* 时间消耗低
-* 托管堆内存分配无限接近于序列化对象的必要分配大小
+* 时间消耗极低
+* 托管堆内存分配接近于对象的真实大小，减少GC带来的性能问题
 * 对于值类型，无装箱、拆箱
 * 可以完全自定义的序列化流程
 * 自动的运行时代理注入 (测试版本，当前不受到完全支持)
-* 自动的C#代理代码生成 [`accelc`] (正在安排开发)
+* 自动的C#代理代码生成 [`accelc`] (正在开发中)
 
 ## 部分功能
 |功能名称|当前是否支持|
 |:-:|:-:|
-|简单类型序列化(`sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`, `string`, `float`, `double`)|支持|
+|简单类型序列化(`sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`, `string`, `float`, `double`, `bool`),对于`double`类型目前可能存在较小的精度误差|支持|
 |字符编码设置(`ASCII`, `Unicode`, `UTF-8`)|支持|
-|动态长度整数(`VariableInteger`)，固定长度整数(`FixedInteger`)|支持|
+|动态长度数字(`VariableNumber`)，固定长度整数(`FixedNumber`)|支持|
 |序列化事件回调接口(`ISerializeMessageReceiver`)|支持|
 |序列化数据损坏检查(`StrictMode`)|支持|
 |运行时代理自动注入(`RuntimeSerializeProxyInjection`)|不完全支持|
@@ -31,10 +31,10 @@
 [SerializeContract(InitialBufferSize = 20L, StrictMode = true)]
 public struct UserInput
 {
-  [SerializedValue(0), VariableInteger] public int CarId;
-  [SerializedValue(1)] public float Horizontal;
-  [SerializedValue(2)] public float Vertical;
-  [SerializedValue(3)] public float HandBrake;
+  [SerializeIndex(0), VariableNumber] public int CarId;
+  [SerializeIndex(1), VariableNumber] public float Horizontal;
+  [SerializeIndex(2), VariableNumber] public float Vertical;
+  [SerializeIndex(3), VariableNumber] public float HandBrake;
 }
 ```
 
@@ -54,9 +54,9 @@ public sealed class UserInputSerializeProxy : ISerializeProxy<UserInput>
   unsafe void ISerializeProxy<UserInput>.Serialize(in UserInput* obj, in OutputBuffer* buffer)
   {
     buffer->WriteValue(0, obj.CarId, false);
-    buffer->WriteValue(1, obj.Horizontal);
-    buffer->WriteValue(2, obj.Vertical);
-    buffer->WriteValue(3, obj.HandBrake);
+    buffer->WriteValue(1, obj.Horizontal, false);
+    buffer->WriteValue(2, obj.Vertical, false);
+    buffer->WriteValue(3, obj.HandBrake, false);
   }
 
   unsafe UserInput ISerializeProxy<UserInput>.Deserialize(in InputBuffer* buffer)
@@ -64,9 +64,9 @@ public sealed class UserInputSerializeProxy : ISerializeProxy<UserInput>
     return new UserInput
     {
       CarId = buffer->ReadVariableInt32(0),
-      Horizontal = buffer->ReadFloat32(1),
-      Vertical = buffer->ReadFloat32(2),
-      HandBrake = buffer->ReadFloat32(3)
+      Horizontal = buffer->ReadVariableFloat32(1),
+      Vertical = buffer->ReadVariableFloat32(2),
+      HandBrake = buffer->ReadVariableFloat32(3)
     };
   }
 }
@@ -102,10 +102,10 @@ Serializer<UserInput>.FreeBufferMemory();
 [SerializeContract(InitialBufferSize = 20L, StrictMode = true)]
 public struct UserInput : ISerializeMessageReceiver
 {
-  [SerializedValue(0), VariableInteger] public int CarId;
-  [SerializedValue(1)] public float Horizontal;
-  [SerializedValue(2)] public float Vertical;
-  [SerializedValue(3)] public float HandBrake;
+  [SerializeIndex(0), VariableNumber] public int CarId;
+  [SerializeIndex(1), VariableNumber] public float Horizontal;
+  [SerializeIndex(2), VariableNumber] public float Vertical;
+  [SerializeIndex(3), VariableNumber] public float HandBrake;
   
   //装箱
   void ISerializeMessageReceiver.OnBeforeSerialize()
@@ -127,33 +127,54 @@ public struct UserInput : ISerializeMessageReceiver
 - 测试类型
 
 ```C#
-[Serializable]
-[SerializeContract(InitialBufferSize = 20L, StrictMode = true)]
-public struct StudentData
+[Serializable, ProtoContract, SerializeContract(InitialBufferSize = 50L, StrictMode = true)]
+public struct SerializeTest
 {
-  [SerializedValue(0)] [Encoding(CharEncoding.ASCII)] public string Name;
-  [SerializedValue(1)] [VariableInteger] public int Age;
-  [SerializedValue(2)] [VariableInteger] public int Number;
-  [SerializedValue(3)] public bool IsHighSchoolStudent;
+  [ProtoMember(1), SerializeIndex(0), Encoding(CharEncoding.ASCII)] public string String;
+  [ProtoMember(2), SerializeIndex(1), Encoding(CharEncoding.ASCII)] public char Char;
+  [ProtoMember(3), SerializeIndex(2)]                               public byte Integer0;
+  [ProtoMember(4), SerializeIndex(3)]                               public sbyte Integer1;
+  [ProtoMember(5), SerializeIndex(4),   VariableNumber]             public ushort Integer2;
+  [ProtoMember(6), SerializeIndex(5),   VariableNumber]             public short Integer3;
+  [ProtoMember(7), SerializeIndex(6),   VariableNumber]             public uint Integer4;
+  [ProtoMember(8), SerializeIndex(7),   VariableNumber]             public int Integer5;
+  [ProtoMember(9), SerializeIndex(8),   VariableNumber]             public ulong Integer6;
+  [ProtoMember(10), SerializeIndex(9),  VariableNumber]             public long Integer7;
+  [ProtoMember(11), SerializeIndex(10), VariableNumber]             public float Float0;
+  [ProtoMember(12), SerializeIndex(11), VariableNumber]             public double Float1;
+  [ProtoMember(13), SerializeIndex(12)]                             public bool Bool;
 }
 
-StudentData data = new StudentData
+SerializeTest test = new SerializeTest
 {
-  Name = "O",
-  Age = 16,
-  Number = 45,
-  IsHighSchoolStudent = false
+  String = "hello world!",
+  Char = 'A',
+  Integer0 = 0,
+  Integer1 = -1,
+  Integer2 = 10,
+  Integer3 = -10,
+  Integer4 = 100,
+  Integer5 = -100,
+  Integer6 = 1000,
+  Integer7 = -1000,
+  Float0 = 10.666f,
+  Float1 = 10.666,
+  Bool = true
 };
 ```
+![performance](README_RES\cmp3.png)
+![performance](README_RES\cmp1.png)
+![performance](README_RES\cmp2.png)
 
 |序列化器名称|序列化 GC Alloc/字节|反序列化 GC Alloc/字节|序列化时间/纳秒|反序列化时间/纳秒|序列化文件大小/字节|
 |:-:|:-:|:-:|:-:|:-:|:-:|
-|Accelbuffer|85|68|2002|941|13|
-|UnityJsonSerializer|188|68|2775|6463|61|
-|.NET BinarySerializer|5427.2|5222.4|39300|41842|178|
-|.NET XmlSerializer|7270.4|16486.4|86540|140405|279|
+|Accelbuffer|180|130|3282|2028|68|
+|Protobuf-net|614.4|512|5254|7345|83|
+|UnityJsonSerializer|512|130|6308|9736|211|
+|.NET BinarySerializer|6963.2|6656|74990|70290|311|
+|.NET XmlSerializer|9113.6|17408|123171|155656|524|
 
 ## 支持
-* 作者正在努力更新部分新的功能，这个序列化系统原本只是作者开发的Unity开源框架(在~~很久~~不久后也会开源)的一部分，由于没有对Unity的一类而被单独分离，在这个序列化系统的大部分功能完善后，会继续着手开发Unity框架，同时不定期维护这个项目，更多细节可以参考源码，部分注释将在今后补全。
+* 作者正在努力更新部分新的功能，这个序列化系统原本只是作者开发的Unity开源框架(在~~很久~~不久后也会开源)的一部分，由于没有对Unity的依赖而被单独分离，在这个序列化系统的大部分功能完善后，会继续着手开发Unity框架，同时不定期维护这个项目，更多细节可以参考源码，部分注释将在今后补全。
 
 * 作者联系方式 QQ：1024751595
