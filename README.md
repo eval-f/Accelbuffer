@@ -24,6 +24,22 @@
 |运行时代理自动注入(`RuntimeSerializeProxyInjection`)|不完全支持|
 |C#代理脚本自动生成(`accelc`)|目前不受支持|
 
+## 当前支持的类型
+#### 可以直接使用`Serializer<T>`进行序列化的类型
+* `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`, `string`, `float`, `double`, `bool` 
+
+* `sbyte[]`, `byte[]`, `short[]`, `ushort[]`, `int[]`, `uint[]`, `long[]`, `ulong[]`, `char[]`, `string[]`, `float[]`, `double[]`, `bool[]` 
+
+* `List<sbyte>`, `List<byte>`, `List<short>`, `List<ushort>`, `List<int>`, `List<uint>`, `List<long>`, `List<ulong>`, `List<char>`, `List<string>`, `List<float>`, `List<double>`, `List<bool>` 
+
+* 定义了对应的`ISerializeProxy<T>`并且标记了`SerializeContractAttribute`指定代理的任意类型
+
+* 标记了`SerializeContractAttribute`拥有默认无参构造函数并且字段类型被`RuntimeSerializeProxyInjection`支持的任意类型
+
+#### 运行时代理自动注入`RuntimeSerializeProxyInjection`支持的字段类型
+* `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`, `string`, `float`, `double`, `bool` 
+* 更多类型正在开发中
+
 ## 基本用法
 ### 1.利用特性标记类型
 #### 方案一，利用运行时代理注入(`RuntimeSerializeProxyInjection`)
@@ -162,9 +178,9 @@ SerializeTest test = new SerializeTest
   Bool = true
 };
 ```
-![performance](README_RES\cmp3.png)
-![performance](README_RES\cmp1.png)
-![performance](README_RES\cmp2.png)
+![performance](README_RES/cmp3.png)
+![performance](README_RES/cmp1.png)
+![performance](README_RES/cmp2.png)
 
 |序列化器名称|序列化 GC Alloc/字节|反序列化 GC Alloc/字节|序列化时间/纳秒|反序列化时间/纳秒|序列化文件大小/字节|
 |:-:|:-:|:-:|:-:|:-:|:-:|
