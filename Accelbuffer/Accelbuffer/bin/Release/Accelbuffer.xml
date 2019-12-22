@@ -569,6 +569,11 @@
             获取当前缓冲区使用的字节大小
             </summary>
         </member>
+        <member name="M:Accelbuffer.Serializer`1.Initialize">
+            <summary>
+            初始化序列化代理，这个方法什么都不会做，仅为了调用静态构造函数
+            </summary>
+        </member>
         <member name="M:Accelbuffer.Serializer`1.FreeBufferMemory">
             <summary>
             释放当前序列化缓冲区使用的内存

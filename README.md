@@ -21,11 +21,18 @@
 |动态长度数字(`VariableNumber`)，固定长度整数(`FixedNumber`)|支持|
 |序列化事件回调接口(`ISerializeMessageReceiver`)|支持|
 |序列化数据损坏检查(`StrictMode`)|支持|
-|运行时代理自动注入(`RuntimeSerializeProxyInjection`)|不完全支持|
+|运行时代理注入(`RuntimeSerializeProxyInjection`)|不完全支持|
 |C#代理脚本自动生成(`accelc`)|目前不受支持|
 
-## 当前支持的类型
-#### 可以直接使用`Serializer<T>`进行序列化的类型
+## 运行时代理注入`RuntimeSerializeProxyInjection`
+* 利用`System.Reflection.Emit`向运行时注入`IL`代码，生成默认的序列化代理，这个过程性能消耗较大，如果使用该方案，
+应该尽量在加载场景等位置进行代理初始化(调用`Serializer<T>.Initialize()`方法，这个方法什么都不会做，仅为了调用静态构造函数)
+
+#### `RuntimeSerializeProxyInjection`支持的字段类型
+* `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`, `string`, `float`, `double`, `bool` 
+* 更多类型将在不久后支持
+
+## 可以直接使用`Serializer<T>`进行序列化的类型
 * `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`, `string`, `float`, `double`, `bool` 
 
 * `sbyte[]`, `byte[]`, `short[]`, `ushort[]`, `int[]`, `uint[]`, `long[]`, `ulong[]`, `char[]`, `string[]`, `float[]`, `double[]`, `bool[]` 
@@ -36,13 +43,9 @@
 
 * 标记了`SerializeContractAttribute`拥有默认无参构造函数并且字段类型被`RuntimeSerializeProxyInjection`支持的任意类型
 
-#### 运行时代理自动注入`RuntimeSerializeProxyInjection`支持的字段类型
-* `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`, `string`, `float`, `double`, `bool` 
-* 更多类型正在开发中
-
 ## 基本用法
-### 1.利用特性标记类型
-#### 方案一，利用运行时代理注入(`RuntimeSerializeProxyInjection`)
+### 1.使用特性标记类型
+#### 方案一，利用`RuntimeSerializeProxyInjection`
 ```c#
 [SerializeContract(InitialBufferSize = 20L, StrictMode = true)]
 public struct UserInput
@@ -88,7 +91,7 @@ public sealed class UserInputSerializeProxy : ISerializeProxy<UserInput>
 }
 ```
 
-#### 方案三，利用C#代理脚本自动生成(`accelc`)
+#### 方案三，利用C#代理脚本生成(`accelc`)
 - 即将被支持
 
 ### 2.序列化对象

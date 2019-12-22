@@ -123,6 +123,11 @@ namespace Accelbuffer
         }
 
         /// <summary>
+        /// 初始化序列化代理，这个方法什么都不会做，仅为了调用静态构造函数
+        /// </summary>
+        public static void Initialize() { }
+
+        /// <summary>
         /// 释放当前序列化缓冲区使用的内存
         /// </summary>
         public static void FreeBufferMemory()
